@@ -38,6 +38,36 @@
         "MELEE_HOST_BUILD_TESTS": "OFF",
         "MELEE_HOST_WARNINGS_AS_ERRORS": "OFF"
       }
+    },
+    {
+      "name": "host-debug-windows",
+      "displayName": "Native host debug (Clang on Visual Studio)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host-debug-windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MELEE_HOST_BUILD_TESTS": "ON",
+        "MELEE_HOST_WARNINGS_AS_ERRORS": "OFF",
+        "MELEE_HOST_BUILD_SDL_RENDERER": "ON"
+      }
+    },
+    {
+      "name": "host-release-windows",
+      "displayName": "Native host release (Clang on Visual Studio)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/host-release-windows",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
+        "CMAKE_BUILD_TYPE": "Release",
+        "MELEE_HOST_BUILD_TESTS": "OFF",
+        "MELEE_HOST_WARNINGS_AS_ERRORS": "OFF",
+        "MELEE_HOST_BUILD_SDL_RENDERER": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -52,6 +82,16 @@
     {
       "name": "host-release",
       "configurePreset": "host-release"
+    },
+    {
+      "name": "host-debug-windows",
+      "configurePreset": "host-debug-windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "host-release-windows",
+      "configurePreset": "host-release-windows",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
@@ -65,6 +105,14 @@
     {
       "name": "host-sanitize",
       "configurePreset": "host-sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "host-debug-windows",
+      "configurePreset": "host-debug-windows",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       }

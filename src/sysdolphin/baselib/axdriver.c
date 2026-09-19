@@ -11,7 +11,7 @@
 #include <dolphin/dvd.h>
 #include <dolphin/os.h>
 
-void* AXDriverAlloc(size_t size)
+void* AXDriverAlloc(unsigned long size)
 {
     void* ptr = &AXDriver_804D77D4[axfxallocsize];
 

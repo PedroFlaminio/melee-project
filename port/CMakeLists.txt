@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(melee-pc)
+
+# clang-cl identifies as Clang, but accepts the Visual Studio option syntax.
+set(MELEE_HOST_MSVC_FRONTEND OFF)
+if(MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(MELEE_HOST_MSVC_FRONTEND ON)
+endif()
 add_library(melee_host STATIC
     src/assets/dol_image.cpp
     src/assets/hsd_archive.cpp
@@ -35,7 +41,7 @@ add_library(melee_host STATIC
 # screen's portrait copies alone took a minute of the cancelled VS route; with
 # these two files optimized the route is back under half a minute.  They keep
 # their debug information.
-if(NOT MSVC)
+if(NOT MELEE_HOST_MSVC_FRONTEND)
     set_source_files_properties(src/gx/command_recorder.cpp src/gx/tev.cpp
         PROPERTIES COMPILE_OPTIONS "-O2")
 endif()
@@ -52,7 +58,7 @@ target_include_directories(melee_host
 target_compile_definitions(melee_host PUBLIC MELEE_HOST=1)
 
 function(melee_host_set_warnings target)
-    if(MSVC)
+    if(MELEE_HOST_MSVC_FRONTEND)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
         if(MELEE_HOST_WARNINGS_AS_ERRORS)
             target_compile_options(${target} PRIVATE /WX)
@@ -72,7 +78,7 @@ function(melee_host_set_warnings target)
 endfunction()
 
 function(melee_host_set_legacy_warnings target)
-    if(MSVC)
+    if(MELEE_HOST_MSVC_FRONTEND)
         target_compile_options(${target} PRIVATE /W3)
     else()
         target_compile_options(${target} PRIVATE
@@ -293,6 +299,8 @@ add_library(melee_game_core STATIC
     ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_3B27.c
     ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_3B2B.c
     ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_3B2E.c
+    ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_3B33.c
+    ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_3B34.c
     ${CMAKE_SOURCE_DIR}/src/sysdolphin/baselib/hsd_4D11.c
     ${CMAKE_SOURCE_DIR}/src/melee/gm/gm_1736.c
     ${CMAKE_SOURCE_DIR}/src/melee/ty/tydisplay.c
@@ -345,7 +353,7 @@ melee_host_set_legacy_warnings(melee_game_core)
 # inline-only, which leaves an undefined reference at -O0; GNU89 semantics emit
 # it, as MWCC does.  No header has a plain inline definition, so nothing is
 # emitted twice.
-if(NOT MSVC)
+if(NOT MELEE_HOST_MSVC_FRONTEND)
     target_compile_options(melee_game_core PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-fgnu89-inline>)
 endif()
@@ -374,19 +382,33 @@ target_sources(melee_game_core PRIVATE
     ${CMAKE_SOURCE_DIR}/src/MSL/float.c
 )
 # Port code keeps the strict warning set even where it shares a target with
-# decompiled translation units, which need the legacy relaxations.
-set_source_files_properties(
-    src/game/scene_graphics.cpp
-    src/game/archive_probe.cpp
-    PROPERTIES COMPILE_OPTIONS "-Wconversion;-Wpedantic;-Wshadow"
-)
+# decompiled translation units, which need the legacy relaxations.  Use the
+# warning spelling of the active compiler: passing GCC options to cl.exe makes
+# an otherwise valid Windows build stop before compiling any source.
+if(MELEE_HOST_MSVC_FRONTEND)
+    set_source_files_properties(
+        src/game/scene_graphics.cpp
+        src/game/archive_probe.cpp
+        PROPERTIES COMPILE_OPTIONS "/W4"
+    )
+else()
+    set_source_files_properties(
+        src/game/scene_graphics.cpp
+        src/game/archive_probe.cpp
+        PROPERTIES COMPILE_OPTIONS "-Wconversion;-Wpedantic;-Wshadow"
+    )
+endif()
 melee_host_enable_sanitizers(melee_game_core)
 target_link_libraries(melee_game_core PUBLIC melee_host)
-if(NOT MSVC)
+if(NOT MELEE_HOST_MSVC_FRONTEND)
     target_compile_options(melee_game_core PRIVATE -ffunction-sections -fdata-sections)
 endif()
 
 add_executable(melee-pc src/main.cpp)
+if(WIN32)
+    target_sources(melee-pc PRIVATE src/windows_asset_setup.cpp)
+    target_link_libraries(melee-pc PRIVATE Comctl32 Comdlg32 Shell32)
+endif()
 target_link_libraries(melee-pc PRIVATE melee_game_core)
 target_include_directories(melee-pc PRIVATE
     src
@@ -401,8 +423,21 @@ endif()
 option(MELEE_HOST_BUILD_SDL_RENDERER "Build the SDL/OpenGL geometry preview" ON)
 if(MELEE_HOST_BUILD_SDL_RENDERER)
     find_package(SDL3 CONFIG QUIET)
+    if(NOT SDL3_FOUND)
+        include(FetchContent)
+        # Keep the Windows executable self-contained instead of requiring a
+        # separately installed SDL runtime.
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            SDL3
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG release-3.4.14
+        )
+        FetchContent_MakeAvailable(SDL3)
+    endif()
     find_package(OpenGL QUIET)
-    if(SDL3_FOUND AND OpenGL_FOUND)
+    if(TARGET SDL3::SDL3 AND TARGET OpenGL::GL)
         include(cmake/imgui.cmake)
         target_sources(melee-pc PRIVATE src/render/sdl_gl_renderer.cpp src/render/settings_ui.cpp src/stb_image.cpp src/custom_textures.cpp)
         target_link_libraries(melee-pc PRIVATE SDL3::SDL3 OpenGL::GL imgui)
@@ -467,7 +502,7 @@ if(MELEE_HOST_BUILD_TESTS)
     melee_host_set_warnings(melee-host-tests)
     # The C checks include the game's own headers, which need the relaxations
     # the decompiled code builds with.
-    if(NOT MSVC)
+    if(NOT MELEE_HOST_MSVC_FRONTEND)
         set_source_files_properties(
             tests/command_layout_check.c
             tests/command_stream_run.c

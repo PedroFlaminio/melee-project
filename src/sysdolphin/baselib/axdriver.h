@@ -44,7 +44,7 @@ struct HSD_SM {
     /* 30 */ int x30;
 };
 
-/* 38BB34 */ void* AXDriverAlloc(size_t size);
+/* 38BB34 */ void* AXDriverAlloc(unsigned long size);
 /* 38BB98 */ void AXDriverFree(void* ptr);
 /* 38BB9C */ void AXDriverUnlink(HSD_SM* v, HSD_SM** head);
 /* 38BC20 */ bool AXDriverKeyOff(int vid);

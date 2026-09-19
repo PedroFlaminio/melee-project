@@ -18,6 +18,7 @@ MELEE_HOST_HSD_BEGIN
 MELEE_HOST_HSD_END
 
 #include <array>
+#include <cstring>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +39,7 @@ std::uint32_t bits_of(float value)
 {
     std::uint32_t result = 0;
     static_assert(sizeof(result) == sizeof(value));
-    __builtin_memcpy(&result, &value, sizeof(result));
+    std::memcpy(&result, &value, sizeof(result));
     return result;
 }
 

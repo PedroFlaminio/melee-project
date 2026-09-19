@@ -12,6 +12,10 @@
 #include "custom_textures.hpp"
 #endif
 
+#if defined(_WIN32)
+#include "windows_asset_setup.hpp"
+#endif
+
 #include <dolphin/dvd.h>
 #include <dolphin/gx/GXDispList.h>
 #include <dolphin/gx/GXStruct.h>
@@ -1107,6 +1111,10 @@ void present_title_frame(void* user_data)
     view->presenter.pace(1'000'000'000ULL / 60ULL);
 }
 
+/* The window presenter is optional; scripted/headless commands below are
+ * available in every build. */
+#endif
+
 /* Scripted runs freeze the OS clock at one instant, 3 December 2001 at
  * midnight, so they repeat whenever they run: the title screen draws one
  * HSD_Rand for each second of the current minute, and that seed picks the
@@ -1122,6 +1130,7 @@ void freeze_scripted_clock()
 
 /* The title screen through its own frame loop, presented in a window, or into
  * a BMP file at one frame. */
+#if defined(MELEE_HOST_SDL_RENDERER)
 int view_title_scene(const std::string& root, const char* screenshot_path,
                      mh_u32 screenshot_frame)
 {
@@ -1183,6 +1192,7 @@ int view_title_scene(const std::string& root, const char* screenshot_path,
     melee_host_destroy(context);
     return result;
 }
+#endif
 
 /* Plays every voice of a .ssm sound bank once through the host's AX mixer
  * and prints each one's sample count and an FNV-1a hash of its samples, which
@@ -1231,6 +1241,8 @@ int decode_sound_bank(const char* path)
     return 0;
 }
 
+/* The remaining scene viewers use the SDL/OpenGL presenter. */
+#if defined(MELEE_HOST_SDL_RENDERER)
 int view_scene(const char* path, const char* symbol, bool scene_model,
                mh_u32 model_index)
 {
@@ -2093,6 +2105,31 @@ int load_scene(const char* path, const char* symbol, bool scene_model,
 int main(int argc, char** argv)
 {
     try {
+#if defined(_WIN32)
+        std::vector<std::string> startup_storage;
+        std::vector<char*> startup_argv;
+        if (argc == 1) {
+            const auto project_root = melee::windows::find_project_root();
+            if (!melee::windows::has_local_assets(project_root)) {
+                if (!melee::windows::show_missing_assets_window(project_root)) {
+                    return 0;
+                }
+            }
+#if defined(MELEE_HOST_SDL_RENDERER)
+            startup_storage = { argv[0], "--play",
+                                (project_root / "assets-local").string() };
+            startup_argv.reserve(startup_storage.size());
+            for (auto& argument : startup_storage) {
+                startup_argv.push_back(argument.data());
+            }
+            argc = static_cast<int>(startup_argv.size());
+            argv = startup_argv.data();
+#else
+            std::cerr << "this build does not include the SDL renderer\n";
+            return 2;
+#endif
+        }
+#endif
         if (argc == 2 && std::string(argv[1]) == "--diagnose") {
             return diagnose();
         }

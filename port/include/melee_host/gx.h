@@ -50,8 +50,11 @@ enum {
     MELEE_HOST_GX_VERTEX_TANGENT = 1 << 4,
     MELEE_HOST_GX_VERTEX_BINORMAL = 1 << 5,
     MELEE_HOST_GX_VERTEX_TEXTURE_IMAGE = 1 << 6,
-    MELEE_HOST_GX_NO_TEXTURE = 0xFFFFFFFFU,
 };
+
+/* MSVC gives an unscoped enum an int underlying type, so UINT32_MAX cannot
+ * be an enumerator even though the value is used as a mh_u32 sentinel. */
+#define MELEE_HOST_GX_NO_TEXTURE ((mh_u32) 0xFFFFFFFFU)
 
 /* The pixel state a draw ran under: what GX was told would decide how the
  * triangle reaches the framebuffer.  Kept separate from the full pixel state
@@ -374,7 +377,7 @@ typedef struct MeleeHostGxTevStage {
     mh_u32 texture_swap;
 } MeleeHostGxTevStage;
 
-enum { MELEE_HOST_GX_TEV_MODE_CUSTOM = 0xFFFFFFFFU };
+#define MELEE_HOST_GX_TEV_MODE_CUSTOM ((mh_u32) 0xFFFFFFFFU)
 
 typedef struct MeleeHostGxTexCoordGen {
     mh_u32 function;

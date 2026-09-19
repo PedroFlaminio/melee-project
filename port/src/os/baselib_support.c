@@ -191,6 +191,19 @@ void OSSetSoundMode(u32 mode)
                                                        : OS_SOUND_MODE_STEREO;
 }
 
+/* The native host does not expose the GameCube component-video setting. */
+u32 OSGetProgressiveMode(void)
+{
+    return 0;
+}
+
+/* CodeWarrior's double-to-u64 helper is emitted as PowerPC assembly in the
+ * original runtime.  Native C has the required conversion directly. */
+u64 __cvt_dbl_usll(double value)
+{
+    return value <= 0.0 ? 0U : (u64) value;
+}
+
 void DCInvalidateRange(void* address, u32 length)
 {
     (void) address;

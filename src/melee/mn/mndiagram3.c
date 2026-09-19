@@ -22,6 +22,8 @@
 #include <sysdolphin/baselib/memory.h>
 #include <sysdolphin/baselib/sislib.h>
 
+static mnDiagram3_DataTable mnDiag3_Data;
+
 #ifdef MUST_MATCH
 static void sdata2_order(void)
 {
@@ -64,7 +66,7 @@ void mnDiagram3_PopulateRankings(HSD_GObj* gobj)
     u16* unit_glyph_ids;
 
     data = gobj->user_data;
-    table = (mnDiagram3_DataTable*) &mnDiagram3_803EEC10;
+    table = (mnDiagram3_DataTable*) &mnDiag3_Data.x0;
 
     {
         u8 offset;
@@ -339,7 +341,7 @@ static inline void mnDiagram3_PositionPopup(HSD_JObj* popup, u8 n,
 
 void mnDiagram3_HandleInput(HSD_GObj* gobj)
 {
-    char* base = (char*) &mnDiagram3_803EEC10;
+    char* base = (char*) &mnDiag3_Data.x0;
     Diagram3* data = mnDiagram3_804D6C20->user_data;
     u32 input = Menu_GetAllInputs();
     /* The reconstructed inlines leave a 248-byte frame without these

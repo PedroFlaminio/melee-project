@@ -25,13 +25,160 @@
 #include <utility>
 
 #include <dolphin/pad.h>
-#include <GL/gl.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_opengl.h>
 
 namespace melee::render {
 
     static int g_anisotropy_level = 0;
     namespace {
+
+#if defined(_WIN32)
+#define MELEE_GL_FUNCTION(type, name) static type melee_##name = nullptr
+        MELEE_GL_FUNCTION(PFNGLACTIVETEXTUREPROC, glActiveTexture);
+        MELEE_GL_FUNCTION(PFNGLATTACHSHADERPROC, glAttachShader);
+        MELEE_GL_FUNCTION(PFNGLBINDBUFFERPROC, glBindBuffer);
+        MELEE_GL_FUNCTION(PFNGLBINDFRAMEBUFFERPROC, glBindFramebuffer);
+        MELEE_GL_FUNCTION(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer);
+        MELEE_GL_FUNCTION(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray);
+        MELEE_GL_FUNCTION(PFNGLBLENDEQUATIONPROC, glBlendEquation);
+        MELEE_GL_FUNCTION(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer);
+        MELEE_GL_FUNCTION(PFNGLBUFFERDATAPROC, glBufferData);
+        MELEE_GL_FUNCTION(PFNGLCHECKFRAMEBUFFERSTATUSPROC, glCheckFramebufferStatus);
+        MELEE_GL_FUNCTION(PFNGLCOMPILESHADERPROC, glCompileShader);
+        MELEE_GL_FUNCTION(PFNGLCREATEPROGRAMPROC, glCreateProgram);
+        MELEE_GL_FUNCTION(PFNGLCREATESHADERPROC, glCreateShader);
+        MELEE_GL_FUNCTION(PFNGLDELETEBUFFERSPROC, glDeleteBuffers);
+        MELEE_GL_FUNCTION(PFNGLDELETEFRAMEBUFFERSPROC, glDeleteFramebuffers);
+        MELEE_GL_FUNCTION(PFNGLDELETEPROGRAMPROC, glDeleteProgram);
+        MELEE_GL_FUNCTION(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers);
+        MELEE_GL_FUNCTION(PFNGLDELETESHADERPROC, glDeleteShader);
+        MELEE_GL_FUNCTION(PFNGLDELETEVERTEXARRAYSPROC, glDeleteVertexArrays);
+        MELEE_GL_FUNCTION(PFNGLENABLEVERTEXATTRIBARRAYPROC, glEnableVertexAttribArray);
+        MELEE_GL_FUNCTION(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer);
+        MELEE_GL_FUNCTION(PFNGLGENBUFFERSPROC, glGenBuffers);
+        MELEE_GL_FUNCTION(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap);
+        MELEE_GL_FUNCTION(PFNGLGENFRAMEBUFFERSPROC, glGenFramebuffers);
+        MELEE_GL_FUNCTION(PFNGLGENRENDERBUFFERSPROC, glGenRenderbuffers);
+        MELEE_GL_FUNCTION(PFNGLGENVERTEXARRAYSPROC, glGenVertexArrays);
+        MELEE_GL_FUNCTION(PFNGLGETPROGRAMINFOLOGPROC, glGetProgramInfoLog);
+        MELEE_GL_FUNCTION(PFNGLGETPROGRAMIVPROC, glGetProgramiv);
+        MELEE_GL_FUNCTION(PFNGLGETSHADERINFOLOGPROC, glGetShaderInfoLog);
+        MELEE_GL_FUNCTION(PFNGLGETSHADERIVPROC, glGetShaderiv);
+        MELEE_GL_FUNCTION(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation);
+        MELEE_GL_FUNCTION(PFNGLLINKPROGRAMPROC, glLinkProgram);
+        MELEE_GL_FUNCTION(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage);
+        MELEE_GL_FUNCTION(PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC, glRenderbufferStorageMultisample);
+        MELEE_GL_FUNCTION(PFNGLSHADERSOURCEPROC, glShaderSource);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM1IPROC, glUniform1i);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM1IVPROC, glUniform1iv);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM2FPROC, glUniform2f);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM4IPROC, glUniform4i);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM4IVPROC, glUniform4iv);
+        MELEE_GL_FUNCTION(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv);
+        MELEE_GL_FUNCTION(PFNGLUSEPROGRAMPROC, glUseProgram);
+        MELEE_GL_FUNCTION(PFNGLVERTEXATTRIBPOINTERPROC, glVertexAttribPointer);
+#undef MELEE_GL_FUNCTION
+
+        bool load_modern_gl_functions(std::string* error)
+        {
+#define MELEE_LOAD_GL(type, name)                                                \
+    melee_##name = reinterpret_cast<type>(SDL_GL_GetProcAddress(#name));         \
+    if (melee_##name == nullptr) {                                                \
+        *error = std::string("OpenGL function unavailable: ") + #name;          \
+        return false;                                                             \
+    }
+            MELEE_LOAD_GL(PFNGLACTIVETEXTUREPROC, glActiveTexture)
+            MELEE_LOAD_GL(PFNGLATTACHSHADERPROC, glAttachShader)
+            MELEE_LOAD_GL(PFNGLBINDBUFFERPROC, glBindBuffer)
+            MELEE_LOAD_GL(PFNGLBINDFRAMEBUFFERPROC, glBindFramebuffer)
+            MELEE_LOAD_GL(PFNGLBINDRENDERBUFFERPROC, glBindRenderbuffer)
+            MELEE_LOAD_GL(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)
+            MELEE_LOAD_GL(PFNGLBLENDEQUATIONPROC, glBlendEquation)
+            MELEE_LOAD_GL(PFNGLBLITFRAMEBUFFERPROC, glBlitFramebuffer)
+            MELEE_LOAD_GL(PFNGLBUFFERDATAPROC, glBufferData)
+            MELEE_LOAD_GL(PFNGLCHECKFRAMEBUFFERSTATUSPROC, glCheckFramebufferStatus)
+            MELEE_LOAD_GL(PFNGLCOMPILESHADERPROC, glCompileShader)
+            MELEE_LOAD_GL(PFNGLCREATEPROGRAMPROC, glCreateProgram)
+            MELEE_LOAD_GL(PFNGLCREATESHADERPROC, glCreateShader)
+            MELEE_LOAD_GL(PFNGLDELETEBUFFERSPROC, glDeleteBuffers)
+            MELEE_LOAD_GL(PFNGLDELETEFRAMEBUFFERSPROC, glDeleteFramebuffers)
+            MELEE_LOAD_GL(PFNGLDELETEPROGRAMPROC, glDeleteProgram)
+            MELEE_LOAD_GL(PFNGLDELETERENDERBUFFERSPROC, glDeleteRenderbuffers)
+            MELEE_LOAD_GL(PFNGLDELETESHADERPROC, glDeleteShader)
+            MELEE_LOAD_GL(PFNGLDELETEVERTEXARRAYSPROC, glDeleteVertexArrays)
+            MELEE_LOAD_GL(PFNGLENABLEVERTEXATTRIBARRAYPROC, glEnableVertexAttribArray)
+            MELEE_LOAD_GL(PFNGLFRAMEBUFFERRENDERBUFFERPROC, glFramebufferRenderbuffer)
+            MELEE_LOAD_GL(PFNGLGENBUFFERSPROC, glGenBuffers)
+            MELEE_LOAD_GL(PFNGLGENERATEMIPMAPPROC, glGenerateMipmap)
+            MELEE_LOAD_GL(PFNGLGENFRAMEBUFFERSPROC, glGenFramebuffers)
+            MELEE_LOAD_GL(PFNGLGENRENDERBUFFERSPROC, glGenRenderbuffers)
+            MELEE_LOAD_GL(PFNGLGENVERTEXARRAYSPROC, glGenVertexArrays)
+            MELEE_LOAD_GL(PFNGLGETPROGRAMINFOLOGPROC, glGetProgramInfoLog)
+            MELEE_LOAD_GL(PFNGLGETPROGRAMIVPROC, glGetProgramiv)
+            MELEE_LOAD_GL(PFNGLGETSHADERINFOLOGPROC, glGetShaderInfoLog)
+            MELEE_LOAD_GL(PFNGLGETSHADERIVPROC, glGetShaderiv)
+            MELEE_LOAD_GL(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)
+            MELEE_LOAD_GL(PFNGLLINKPROGRAMPROC, glLinkProgram)
+            MELEE_LOAD_GL(PFNGLRENDERBUFFERSTORAGEPROC, glRenderbufferStorage)
+            MELEE_LOAD_GL(PFNGLRENDERBUFFERSTORAGEMULTISAMPLEPROC, glRenderbufferStorageMultisample)
+            MELEE_LOAD_GL(PFNGLSHADERSOURCEPROC, glShaderSource)
+            MELEE_LOAD_GL(PFNGLUNIFORM1IPROC, glUniform1i)
+            MELEE_LOAD_GL(PFNGLUNIFORM1IVPROC, glUniform1iv)
+            MELEE_LOAD_GL(PFNGLUNIFORM2FPROC, glUniform2f)
+            MELEE_LOAD_GL(PFNGLUNIFORM4IPROC, glUniform4i)
+            MELEE_LOAD_GL(PFNGLUNIFORM4IVPROC, glUniform4iv)
+            MELEE_LOAD_GL(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)
+            MELEE_LOAD_GL(PFNGLUSEPROGRAMPROC, glUseProgram)
+            MELEE_LOAD_GL(PFNGLVERTEXATTRIBPOINTERPROC, glVertexAttribPointer)
+#undef MELEE_LOAD_GL
+            return true;
+        }
+
+#define glActiveTexture melee_glActiveTexture
+#define glAttachShader melee_glAttachShader
+#define glBindBuffer melee_glBindBuffer
+#define glBindFramebuffer melee_glBindFramebuffer
+#define glBindRenderbuffer melee_glBindRenderbuffer
+#define glBindVertexArray melee_glBindVertexArray
+#define glBlendEquation melee_glBlendEquation
+#define glBlitFramebuffer melee_glBlitFramebuffer
+#define glBufferData melee_glBufferData
+#define glCheckFramebufferStatus melee_glCheckFramebufferStatus
+#define glCompileShader melee_glCompileShader
+#define glCreateProgram melee_glCreateProgram
+#define glCreateShader melee_glCreateShader
+#define glDeleteBuffers melee_glDeleteBuffers
+#define glDeleteFramebuffers melee_glDeleteFramebuffers
+#define glDeleteProgram melee_glDeleteProgram
+#define glDeleteRenderbuffers melee_glDeleteRenderbuffers
+#define glDeleteShader melee_glDeleteShader
+#define glDeleteVertexArrays melee_glDeleteVertexArrays
+#define glEnableVertexAttribArray melee_glEnableVertexAttribArray
+#define glFramebufferRenderbuffer melee_glFramebufferRenderbuffer
+#define glGenBuffers melee_glGenBuffers
+#define glGenerateMipmap melee_glGenerateMipmap
+#define glGenFramebuffers melee_glGenFramebuffers
+#define glGenRenderbuffers melee_glGenRenderbuffers
+#define glGenVertexArrays melee_glGenVertexArrays
+#define glGetProgramInfoLog melee_glGetProgramInfoLog
+#define glGetProgramiv melee_glGetProgramiv
+#define glGetShaderInfoLog melee_glGetShaderInfoLog
+#define glGetShaderiv melee_glGetShaderiv
+#define glGetUniformLocation melee_glGetUniformLocation
+#define glLinkProgram melee_glLinkProgram
+#define glRenderbufferStorage melee_glRenderbufferStorage
+#define glRenderbufferStorageMultisample melee_glRenderbufferStorageMultisample
+#define glShaderSource melee_glShaderSource
+#define glUniform1i melee_glUniform1i
+#define glUniform1iv melee_glUniform1iv
+#define glUniform2f melee_glUniform2f
+#define glUniform4i melee_glUniform4i
+#define glUniform4iv melee_glUniform4iv
+#define glUniformMatrix4fv melee_glUniformMatrix4fv
+#define glUseProgram melee_glUseProgram
+#define glVertexAttribPointer melee_glVertexAttribPointer
+#endif
 
         std::vector<TextureImage> texture_images;
 
@@ -717,6 +864,14 @@ namespace melee::render {
                 SDL_Quit();
                 return false;
             }
+#if defined(_WIN32)
+            if (!load_modern_gl_functions(error)) {
+                SDL_GL_DestroyContext(out->context);
+                SDL_DestroyWindow(out->window);
+                SDL_Quit();
+                return false;
+            }
+#endif
             return true;
         }
 

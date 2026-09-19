@@ -11,7 +11,7 @@ import struct
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO, Iterator
+from typing import BinaryIO, Callable, Iterator
 
 
 GAMECUBE_MAGIC = 0xC2339F3D
@@ -229,7 +229,13 @@ class GameCubeDisc:
             raise DiscError(f"extraction path escapes destination: {relative}") from error
         return output
 
-    def extract(self, destination: Path, *, force: bool = False) -> dict[str, object]:
+    def extract(
+        self,
+        destination: Path,
+        *,
+        force: bool = False,
+        progress: Callable[[int, int], None] | None = None,
+    ) -> dict[str, object]:
         if not self.supported:
             raise DiscError(
                 "unsupported disc: expected GALE01 with main.dol SHA-1 "
@@ -254,10 +260,23 @@ class GameCubeDisc:
 
         destination.mkdir(parents=True, exist_ok=True)
         extracted: list[dict[str, object]] = []
+        total_bytes = sum(entry.size for entry in file_entries) + self.dol_size
+        copied_bytes = 0
+
+        def report(bytes_written: int) -> None:
+            nonlocal copied_bytes
+            copied_bytes += bytes_written
+            if progress is not None:
+                progress(copied_bytes, total_bytes)
+
+        if progress is not None:
+            progress(0, total_bytes)
         with self.image_path.open("rb") as stream:
             for entry, output in zip(file_entries, outputs, strict=False):
                 output.parent.mkdir(parents=True, exist_ok=True)
-                sha1 = self._copy_range(stream, entry.offset, entry.size, output)
+                sha1 = self._copy_range(
+                    stream, entry.offset, entry.size, output, on_bytes_written=report
+                )
                 extracted.append(
                     {
                         "entry_number": entry.entry_number,
@@ -269,7 +288,10 @@ class GameCubeDisc:
 
             dol_output = self._output_path(destination, "sys/main.dol")
             dol_output.parent.mkdir(parents=True, exist_ok=True)
-            self._copy_range(stream, self.dol_offset, self.dol_size, dol_output)
+            self._copy_range(
+                stream, self.dol_offset, self.dol_size, dol_output,
+                on_bytes_written=report,
+            )
 
         manifest: dict[str, object] = {
             "schema_version": 1,
@@ -319,7 +341,12 @@ class GameCubeDisc:
 
     @staticmethod
     def _copy_range(
-        stream: BinaryIO, offset: int, size: int, destination: Path
+        stream: BinaryIO,
+        offset: int,
+        size: int,
+        destination: Path,
+        *,
+        on_bytes_written: Callable[[int], None] | None = None,
     ) -> str:
         digest = hashlib.sha1()
         temporary = destination.with_name(destination.name + ".tmp")
@@ -334,6 +361,8 @@ class GameCubeDisc:
                     output.write(chunk)
                     digest.update(chunk)
                     remaining -= len(chunk)
+                    if on_bytes_written is not None:
+                        on_bytes_written(len(chunk))
                 output.flush()
                 os.fsync(output.fileno())
             os.replace(temporary, destination)
@@ -363,6 +392,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     extract_parser.add_argument(
         "--force", action="store_true", help="overwrite existing extracted files"
     )
+    extract_parser.add_argument(
+        "--progress-file", type=Path,
+        help="write copied and total bytes to this file while extracting",
+    )
     return parser.parse_args(argv)
 
 
@@ -374,7 +407,20 @@ def main(argv: list[str] | None = None) -> int:
             print(_metadata_json(disc))
             return 0 if disc.supported else 3
         if args.command == "extract":
-            manifest = disc.extract(args.destination, force=args.force)
+            def write_progress(copied: int, total: int) -> None:
+                if args.progress_file is None:
+                    return
+                progress_path = args.progress_file
+                progress_path.parent.mkdir(parents=True, exist_ok=True)
+                # The Windows setup window polls this file while extraction is
+                # running. Replacing an open file is denied on Windows, so
+                # update it in place; a partially read value is simply ignored
+                # by the next UI timer tick.
+                progress_path.write_text(f"{copied} {total}\n", encoding="ascii")
+
+            manifest = disc.extract(
+                args.destination, force=args.force, progress=write_progress
+            )
             print(json.dumps(manifest["game"], indent=2, sort_keys=True))
             return 0
         raise AssertionError(f"unhandled command: {args.command}")

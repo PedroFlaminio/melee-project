@@ -1,5 +1,5 @@
 #include <m2c_macros.h>
-#include <printf.h> // IWYU pragma: keep
+#include <MSL/printf.h> // IWYU pragma: keep
 
 #include "cobj.h"
 #include "gobj.h"
