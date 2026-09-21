@@ -43,6 +43,13 @@ void melee_host_match_set_vs_total(mh_u32 total);
  * False when the save data already had it. */
 bool melee_host_match_award_trophy(mh_u32 trophy);
 
+/* Send the running stage select screen straight into a match on `stkind`,
+ * through the force_stage_id the game's own Training and Tournament modes
+ * set.  Lets a route reach any stage without steering the cursor across the
+ * select screen, which is how the stage dimension gets swept for crashes.
+ * False unless the stage select is the running scene. */
+bool melee_host_match_force_stage(mh_u32 stkind);
+
 /* The clock the running VS scene counts, in whole seconds left and frames
  * inside the current second (0 to 59).  False when the scene has no timer. */
 bool melee_host_match_clock(mh_u32* seconds, mh_u32* frames);

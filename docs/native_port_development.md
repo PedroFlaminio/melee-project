@@ -640,6 +640,28 @@ DISPLAY=:1 python3 port/tools/play_keyboard_probe.py --no-press
   the trick with `#ifdef MELEE_HOST` and use the variable itself; the console branch does not
   change.
 
+## Sweeping the stages
+
+Every stage the select screen offers, entered and reported:
+
+```sh
+python3 port/tools/sweep_stages.py                     # all 30
+python3 port/tools/sweep_stages.py --stages 14,23,31   # a few
+python3 port/tools/sweep_stages.py --binary build/host-sanitize/port/melee-pc
+```
+
+It walks the real menus to the select screen, then forces the stage with the `FRAME:STAGE=KIND`
+route entry, which sets the same `force_stage_id` the game's own Training and Tournament modes
+set (`melee_host_sss_force_stage`). Steering the cursor instead would reach only the squares a
+save unlocks and would need the icon layout, which lives in the model rather than a table.
+
+- A stage passes when the match scene `0x02` comes up and the route reaches its stop frame.
+- A refusal names its own cause and beats the signal the `OSPanic` after it turns into, so read
+  the `refused` line rather than the SIGABRT.
+- `random_cpu_matches.py` is the other half: it varies characters but plays every match on
+  Hyrule Temple (`STAGE_KIND = 14`), so the two together cover the roster and the stage list,
+  but not yet their combinations.
+
 ## Scene loading through the object layer
 
 The command below materializes the file's descriptors in host layout and calls

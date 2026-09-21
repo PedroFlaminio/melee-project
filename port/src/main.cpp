@@ -2291,7 +2291,7 @@ int main(int argc, char** argv)
              * and come back up; with LAST it is held through that frame.  An
              * input is a button name, SX=N or SY=N for the main stick, or
              * the headless diagnostics SHADOW, EFBCOPY, FIGHTERS, MOVE, ACTION,
-             * FALLS, RULES, RESULT, CLOCK[=SECONDS], MATCHES[=TOTAL],
+             * FALLS, RULES, RESULT, STAGE=KIND, CLOCK[=SECONDS], MATCHES[=TOTAL],
              * TROPHY=ID, STOP and TRACE=PATH. PORT is 1 to 4,
              * 1 when omitted; a port the script names is
              * connected from the start.  Frames count across modes. */
@@ -2348,6 +2348,7 @@ int main(int argc, char** argv)
                 std::vector<mh_u32> result_traces;
                 std::vector<mh_u32> clock_traces;
                 std::vector<std::array<mh_u32, 2>> clock_sets;
+                std::vector<std::array<mh_u32, 2>> stage_sets;
                 std::vector<mh_u32> matches_traces;
                 std::vector<std::array<mh_u32, 2>> matches_sets;
                 std::vector<mh_u32> stop_frames;
@@ -2529,6 +2530,17 @@ int main(int argc, char** argv)
                     } else {
                         input.matches_traces.push_back(frame);
                     }
+                    continue;
+                }
+                if (inputs.rfind("STAGE=", 0) == 0) {
+                    if (frames.find('-') != std::string::npos) {
+                        std::cerr << "expected FRAME:STAGE=KIND, got "
+                                  << entry << '\n';
+                        return 2;
+                    }
+                    input.stage_sets.push_back(
+                        { static_cast<mh_u32>(std::stoul(frames)),
+                          static_cast<mh_u32>(std::stoul(inputs.substr(6))) });
                     continue;
                 }
                 if (inputs == "CLOCK" || inputs.rfind("CLOCK=", 0) == 0) {
@@ -3041,6 +3053,22 @@ int main(int argc, char** argv)
                  * moves it: a time-up is a minute of match away under the
                  * shortest rule the menu offers, and the scene keeps
                  * counting from wherever the clock is left. */
+                /* The stage the select screen hands to the match.  The
+                 * cursor only ever reaches the squares a save unlocks, and
+                 * steering it needs the icon layout; force_stage_id is the
+                 * route the game's own modes take. */
+                for (const auto& entry : state->stage_sets) {
+                    if (entry[0] != state->frames) {
+                        continue;
+                    }
+                    if (melee_host_match_force_stage(entry[1])) {
+                        std::cout << "stage frame " << entry[0] << ": forced "
+                                  << entry[1] << '\n';
+                    } else {
+                        std::cout << "stage frame " << entry[0]
+                                  << ": not on the stage select\n";
+                    }
+                }
                 for (const auto& entry : state->clock_sets) {
                     if (entry[0] != state->frames) {
                         continue;

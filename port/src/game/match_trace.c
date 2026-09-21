@@ -7,6 +7,7 @@
 #include <melee/gm/gmresult.h>
 #include <melee/gm/types.h>
 #include <melee/ft/inlines.h>
+#include <melee/mn/mnstagesel.h>
 #include <melee/pl/player.h>
 #include <sysdolphin/baselib/random.h>
 
@@ -109,6 +110,11 @@ void melee_host_match_set_vs_total(mh_u32 total)
 bool melee_host_match_award_trophy(mh_u32 trophy)
 {
     return fn_80172C78((int) trophy);
+}
+
+bool melee_host_match_force_stage(mh_u32 stkind)
+{
+    return melee_host_sss_force_stage((int) stkind);
 }
 
 bool melee_host_match_clock(mh_u32* seconds, mh_u32* frames)

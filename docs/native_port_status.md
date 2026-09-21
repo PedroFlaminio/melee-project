@@ -583,22 +583,28 @@ Each translator below unblocked the next step of match entry, in this order:
   layout on the host. The others are `1 << 31` in an `int` (`ftCo_Guard.c`, `ftCo_Escape.c`,
   `ftCo_Catch.c`, `ftCo_Attack100.c`, `ftCo_Damage.c`, `fighter.c`) and calls through a function
   pointer of another type.
-- The `--play` window opened and held 60 Hz on the title. The keyboard has been exercised
-  through real events (`play_keyboard_probe.py`: `d` makes the fighter run, `j` makes it jab),
-  but only on those two keys, and nobody has played a whole match; the gamepad has not been
-  touched, and its Y axis only has a unit test, with no gamepad connected. The numeric keypad
-  gives the D-pad, H and L give L and R with the digital click, and on the gamepad the D-pad and
-  the triggers at the end of travel do the same; none of that has been pressed.
-  `--view-title-scene` still has the window path unused.
+- Many matches have been played through the `--play` window, and the game runs. What that
+  exposed is that **some character and stage combinations still crash**; the combinations are
+  not yet recorded, and the automated suite does not reach them, because
+  `port/tools/random_cpu_matches.py` plays every match on Hyrule Temple
+  (`STAGE_KIND = 14`, from when it was the only stage that loaded) and draws from the 14
+  characters the select screen offers without a save. See the known issues in
+  [`project-progress.md`](project-progress.md). `--view-title-scene` still has the window path
+  unused.
 - `--view-title-scene` ends when `gm_801A4D34` returns: START ends the scene, and the next one
   does not exist on the host yet.
 - The title's texture cache and the presenter recognize an image by the address of its data and
   its palette. An EFB copy that rewrites the address is re-decoded by the copy's generation, but
   an animation that rewrites an image by some other means keeps showing the first one.
-- `ground.c`'s `stage_datas` table links every stage, but none loads completely yet: the host's
-  file API translates `grGroundParam`, `coll_data`, `map_head` (69 of 71), `map_plit`,
-  `quake_model_set`, `itemdata` and `ALDYakuAll`, and of `yakumono_param` only the zeroed block
-  29 files keep, Hyrule Temple among them. The other 47 have parameters of their own, with the
+- **Only 3 of the 30 stages the select screen offers enter a match**: 14 Hyrule Temple,
+  23 Poke Floats and 31 Battlefield. Measured 21 September 2026 with
+  `port/tools/sweep_stages.py`. The other 27 abort on `yakumono_param`, 17 with "no
+  stage-specific verified layout" and 9 with "contains an unsupported relocated object"; the
+  random square resolves to one of them. `game_data_translators.c:3655` turns the refusal into
+  an `OSPanic`, so picking such a stage ends the process. `ground.c`'s `stage_datas` table
+  links every stage, and the host's file API translates `grGroundParam`, `coll_data`,
+  `map_head` (69 of 71), `map_plit`, `quake_model_set`, `itemdata` and `ALDYakuAll`; of
+  `yakumono_param` only the zeroed block 29 files keep, Hyrule Temple among them. The other 47 have parameters of their own, with the
   layout of the struct each `grXXX.c` declares (floats, ints, pairs of u16 in one word and
   pointers), and stop by name: without the field widths, a block of bytes from the disc does not
   become host values. Stage items created from `itemdata` stop by name where the item needs its

@@ -3,6 +3,12 @@
 > **Closed milestone.** The MVP reached 100% on 16 September 2026 and this document is
 > no longer updated. Ongoing progress is tracked in
 > [project-progress.md](project-progress.md), which covers the whole project through 1.0.
+>
+> One statement below has since been overtaken: the document repeatedly notes that nobody had
+> played a match. On 21 September 2026 many matches were played and the game runs. That also
+> surfaced the crashing character and stage combinations recorded under *Known issues* in
+> [project-progress.md](project-progress.md). The text is left as written, as the record of
+> what was true when the milestone closed.
 
 ## MVP definition
 

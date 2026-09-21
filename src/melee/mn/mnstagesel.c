@@ -760,6 +760,21 @@ static inline HSD_PadStatus* get_pad(u8 i)
     return &HSD_PadCopyStatus[i];
 }
 
+#ifdef MELEE_HOST
+/* The stage the running select screen will hand to the match, by the game's
+ * own route: Training, Tournament and Stamina set force_stage_id the same way,
+ * and OnFrame below takes it before it looks at any pad.  Only valid while the
+ * select screen is the running scene; false otherwise. */
+bool melee_host_sss_force_stage(int stkind)
+{
+    if (sss_data == NULL || stkind < 0 || stkind > 127) {
+        return false;
+    }
+    sss_data->force_stage_id = (s8) stkind;
+    return true;
+}
+#endif
+
 /// OnFrame
 void mnStageSel_Scene_OnFrame(void)
 {
