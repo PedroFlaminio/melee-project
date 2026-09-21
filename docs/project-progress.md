@@ -130,11 +130,36 @@ path in the engine to unwind a half-built stage. A stage asked for another way �
 `FRAME:STAGE`, or a mode that sets `force_stage_id` — still loads and still stops loudly, so
 this hides nothing from the sweep.
 
-**What is left.** No longer one cause. Castle and Icicle Mountain need their layouts corrected
-(R04 already noted Icicle Mountain's offsets are wrong). Fountain of Dreams and Pokemon Stadium
-need an `image_desc` translator. The remaining ten crash further into stage setup and each
-needs its own backtrace; the two fixed above suggest more truncated pointers on paths no stage
-had reached before.
+**What is left, with a named cause each.** A sanitizer sweep on 21 September 2026
+(`sweep_stages.py --binary build/host-sanitize/port/melee-pc`) gave every remaining stage a
+file and line:
+
+| Stage | Cause |
+| --- | --- |
+| 2 Fountain of Dreams | `image_desc` has no translator |
+| 3 Pokemon Stadium | ASan heap-buffer-overflow in `memzero` (`lb/lb_00B0.c:398`) |
+| 4 Princess Peach's Castle | generated layout wrong; extent check catches it |
+| 5 Kongo Jungle | ASan SEGV in `HSD_JObjSetRotationZ` (`jobj.h:338`), from `grKongo_801D77E0` |
+| 6 Brinstar | ASan global-buffer-overflow in `grZebes_GetBubbleStartX` (`grzebes.c:2262`) |
+| 8 Yoshi's Story | `item.c:576`, stage item kind 210 has no attribute translator |
+| 10 Mute City | descriptor pointer arrives as a raw offset (`granime.c` → `HSD_FObjLoadDesc`) |
+| 11 Rainbow Cruise | *was* a heap overflow from a console-sized allocation — fixed; now SEGV at `grrcruise.c:767` |
+| 13 Great Bay | `item.c:576`, stage item kind 221 has no attribute translator |
+| 16 Yoshi's Island | garbage joint pointer in `JObjLoadJointSub` (`jobj.c:617`) |
+| 20 Mushroom Kingdom II | ASan SEGV in `grAnime_801C67A8` (`granime.c:159`), `matanim` is a raw offset |
+| 22 Venom | ASan global-buffer-overflow in `grVenom_80203EAC` (`grvenom.c:571`) |
+| 24 Big Blue | ASan heap-buffer-overflow in `grBigBlue_801E6364` (`grbigblue.c:518`) |
+| 25 Icicle Mountain | generated layout wrong; R04 already noted its offsets |
+
+The shape of the work is now clear, and it is not one lever. Most of these are the documented
+host-size families — an allocation sized from the console's table, a read that runs past a
+global the console could read past, a descriptor offset used as a pointer — each small and
+well-precedented, but **there is a chain of them per stage**: fixing Rainbow Cruise's
+allocation (`Map_VanishEntry` is wider on the host than the `Map_VanishDesc` table it was
+sized from) removed that overflow and immediately exposed the next fault in the same stage.
+
+The sanitizer is the tool that walks those chains; a stage is done when a sanitized run of it
+reaches the match scene. Budget per stage accordingly, rather than expecting one fix each.
 
 ### Why the suite never saw it
 

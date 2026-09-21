@@ -62,7 +62,7 @@ SELECT_SCENE = "0x09"
 
 
 def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
-              timeout: int) -> dict:
+              timeout: int, log_lines: int = 25) -> dict:
     """Play one stage and classify how it went."""
     route = [*ROUTE_TO_STAGE_SELECT, f"{FORCE_FRAME}:STAGE={kind}",
              f"{FORCE_FRAME + frames}:STOP"]
@@ -74,7 +74,13 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
                               timeout=timeout,
                               env={"MELEE_HOST_AUDIO": "0", "PATH": "/usr/bin:/bin",
                                    "HOME": str(pathlib.Path.home()),
-                                   "LANG": "C", "LC_ALL": "C"})
+                                   "LANG": "C", "LC_ALL": "C",
+                                   # The boot and the scenes do not free what
+                                   # they allocate, so LeakSanitizer would end
+                                   # every sanitized run with code 1; the ctest
+                                   # suite runs the same way.
+                                   "ASAN_OPTIONS": "detect_leaks=0",
+                                   "UBSAN_OPTIONS": "print_stacktrace=1"})
     except subprocess.TimeoutExpired:
         report.update(status="timeout", detail=f"no exit within {timeout}s")
         return report
@@ -87,8 +93,17 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
 
     # A refusal names its own cause, so it beats the bare signal the OSPanic
     # that follows it turns into.
+    # ASan's SUMMARY is the authoritative line: it names the fault and where.
+    # UBSan's "runtime error" lines only print, and several benign ones fire
+    # early in every run -- matching those first would hide the real fault.
+    asan = re.search(r"SUMMARY: AddressSanitizer: (\S+) (\S+?)(?::\d+:\d+)? "
+                     r"in (\S+)", out)
     refusal = re.search(r"cannot translate (\w+): (.*)", out)
-    if refusal:
+    if asan:
+        where = asan.group(2).split("/melee/")[-1]
+        report.update(status="sanitizer",
+                      detail=f"{asan.group(1)} in {asan.group(3)} ({where})")
+    elif refusal:
         report.update(status="refused",
                       detail=f"{refusal.group(1)}: {refusal.group(2)}"[:160])
     elif done.returncode < 0:
@@ -108,7 +123,7 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
         report.update(status="ok", detail="")
     # Keep the tail of the output for anything that did not simply work.
     if report["status"] != "ok":
-        report["output"] = "\n".join(out.splitlines()[-25:])
+        report["output"] = "\n".join(out.splitlines()[-log_lines:])
     return report
 
 
@@ -122,6 +137,8 @@ def main() -> int:
                     help="drawn frames of match before the route stops")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", help="write one JSON line a stage here")
+    ap.add_argument("--log-lines", type=int, default=25,
+                    help="lines of output kept for a broken run; a\n                          sanitizer report needs more")
     args = ap.parse_args()
 
     binary = (REPO / args.binary).resolve()
@@ -133,7 +150,8 @@ def main() -> int:
     results = []
     broken = []
     for kind in kinds:
-        report = run_stage(binary, args.root, kind, args.frames, args.timeout)
+        report = run_stage(binary, args.root, kind, args.frames,
+                           args.timeout, args.log_lines)
         results.append(report)
         mark = "ok  " if report["status"] == "ok" else "BAD "
         print(f"{mark}{kind:>3} {report['name']:<24} {report['status']:<8} "

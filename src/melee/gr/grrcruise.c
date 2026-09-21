@@ -1051,7 +1051,16 @@ void grRCruise_80201410(Ground_GObj* gobj)
     Ground* gp = GET_GROUND(gobj);
     int i;
 
+    /* The entries written below are Map_VanishEntry, which keeps an HSD_JObj*;
+     * the table sized here is Map_VanishDesc.  The two are the same size on
+     * the console, and the entry is wider on the host, so the allocation has
+     * to come from the type being written. */
+#ifdef MELEE_HOST
+    gp->u.map.vanish = HSD_MemAlloc(ARRAY_SIZE(lbl_803E5014) *
+                                    sizeof(*gp->u.map.vanish));
+#else
     gp->u.map.vanish = HSD_MemAlloc(sizeof(lbl_803E5014));
+#endif
     HSD_ASSERT(1453, gp->u.map.vanish);
 
     for (i = 0; i < ARRAY_SIZE(lbl_803E5014); i++) {
