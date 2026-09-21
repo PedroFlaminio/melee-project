@@ -1,380 +1,360 @@
-# Melee Unlocked: referências para acelerar o port nativo
+# Melee Unlocked: references for accelerating the native port
 
-Levantamento em 15/09/2026, a partir dos dois checkouts locais.
+Survey from 15 September 2026, based on the two local checkouts.
 
-| Base examinada | Revisão |
+| Base examined | Revision |
 | --- | --- |
 | `melee-unlocked/` | `6e2d56a6351e95b7a7d6d487a29f0cbd4e6b9643` — `Make settings closed state passive` |
-| Nosso `melee/` | `41816018339db6e05f0e02767ee11562424a6c81` — mais as alterações locais já existentes |
+| Our `melee/` | `41816018339db6e05f0e02767ee11562424a6c81` — plus the local changes already present |
 
-## Resumo e recomendação
+## Summary and recommendation
 
-O melhor aproveitamento imediato é usar o Melee Unlocked como referência de
-comportamento, fonte de testes e exemplo de implementação dos serviços do
-console. Os maiores ganhos potenciais estão em áudio, validação de gameplay e
-renderização GX. Adotar sua recompilação estática como base seria uma mudança
-de arquitetura, com custo próprio de integração e suporte a Linux.
+The best immediate use is to treat Melee Unlocked as a behavioural reference, a source of
+tests and an example implementation of the console's services. The largest potential gains are
+in audio, gameplay validation and GX rendering. Adopting its static recompilation as a base
+would be an architectural change, with its own integration cost and Linux support burden.
 
-Para o estágio atual do nosso port, recomendo esta ordem:
+For our port's current stage, this is the recommended order:
 
-1. Consolidar a luta Fox/Fox até vitória por estoque e usar seus estados como
-   base de comparação reproduzível. O teste dessa rota **já existe no worktree**.
-2. Completar a execução de vozes AX e produzir áudio verificável.
-3. Corrigir diferenças gráficas com capturas e estados GX equivalentes.
-4. Ampliar personagens/estágios e persistir saves.
-5. Tratar alta taxa de atualização e online depois de estabelecer essa base.
+1. Consolidate the Fox/Fox match through to a stock victory and use its states as a
+   reproducible basis for comparison. The test for that route **already exists in the
+   worktree**.
+2. Complete AX voice playback and produce verifiable audio.
+3. Fix graphical differences with captures and equivalent GX states.
+4. Broaden characters/stages and persist saves.
+5. Handle high refresh rate and online after establishing that base.
 
-Este documento distingue observação de código, resultados executados aqui e
-afirmações da documentação do projeto. Não foi executada uma partida do
-Melee Unlocked, nem feita uma verificação de compatibilidade com Slippi.
+This document distinguishes code observations, results actually run here, and claims made by
+the project's documentation. No Melee Unlocked match was played, and no Slippi compatibility
+check was performed.
 
-## 1. A diferença de arquitetura muda o que podemos aproveitar
+## 1. The architectural difference changes what we can reuse
 
-| Aspecto | Melee Unlocked | Nosso port | Consequência prática |
+| Aspect | Melee Unlocked | Our port | Practical consequence |
 | --- | --- | --- | --- |
-| Código do jogo | Traduz o DOL PowerPC para C++; inclui códigos Gecko/Slippi por padrão | Compila o C da decompilação com `MELEE_HOST` | O código gerado não substitui diretamente nossos módulos C |
-| Memória | RAM convidada de 24 MiB, endereços de 32 bits e leituras/escritas big-endian | Objetos e ponteiros nativos de 64 bits, descritores materializados | Os tradutores de assets continuam necessários aqui |
-| SDK do console | HLE: funções host recebem registradores de uma CPU PowerPC representada em software | Fachadas com ABI C e tipos adaptados ao host | Reaproveitar a lógica exige trocar a fronteira de chamadas |
-| Vídeo | Estado GX por registradores, shaders HLSL, D3D12 | Recorder da API GX, shaders GLSL, SDL/OpenGL | Fórmulas e casos de teste são mais transferíveis que o backend |
-| Plataforma do executável | Windows x64/MSVC, opções AVX2 e serviços Win32 | Desenvolvimento atual em Linux | Não é uma biblioteca pronta para ligar ao nosso executável |
-| Rollback | Copia regiões da memória convidada com exclusões específicas | Estado espalhado por objetos e alocações nativas | Savestates precisam de uma estratégia própria |
+| Game code | Translates the PowerPC DOL to C++; includes Gecko/Slippi codes by default | Compiles the decompilation's C with `MELEE_HOST` | The generated code does not directly replace our C modules |
+| Memory | 24 MiB guest RAM, 32-bit addresses and big-endian reads/writes | Native 64-bit objects and pointers, materialized descriptors | The asset translators are still needed here |
+| Console SDK | HLE: host functions receive registers from a PowerPC CPU represented in software | Facades with a C ABI and host-adapted types | Reusing the logic means moving the call boundary |
+| Video | GX state through registers, HLSL shaders, D3D12 | GX API recorder, GLSL shaders, SDL/OpenGL | Formulas and test cases transfer more readily than the backend |
+| Executable platform | Windows x64/MSVC, AVX2 options and Win32 services | Current development on Linux | It is not a library ready to link into our executable |
+| Rollback | Copies regions of guest memory with specific exclusions | State spread across native objects and allocations | Savestates need a strategy of their own |
 
-Fontes: [CMake do Unlocked](../../melee-unlocked/port/CMakeLists.txt),
-[contexto e memória PPC](../../melee-unlocked/port/runtime/ppc/ppc.h),
-[ABI HLE](../../melee-unlocked/port/runtime/hle/hle.h),
-[nosso CMake](../port/CMakeLists.txt) e
-[materialização HSD](../port/src/assets/hsd_materialize.cpp).
+Sources: [Unlocked's CMake](../../melee-unlocked/port/CMakeLists.txt),
+[PPC context and memory](../../melee-unlocked/port/runtime/ppc/ppc.h),
+[HLE ABI](../../melee-unlocked/port/runtime/hle/hle.h),
+[our CMake](../port/CMakeLists.txt) and
+[HSD materialization](../port/src/assets/hsd_materialize.cpp).
 
-O Unlocked preserva o layout de memória do console. Por isso, a execução de um
-personagem nele não demonstra que exista um schema reutilizável de `ftData*`
-para 64 bits. No nosso código, o registro específico de personagem continua
-sendo `ftDataFox`, em
+Unlocked preserves the console's memory layout. A character running there therefore does not
+demonstrate that a reusable 64-bit `ftData*` schema exists. In our code the character-specific
+record is still `ftDataFox`, in
 [game_data_translators.c](../port/src/game/game_data_translators.c).
 
-Há uma opção útil para comparação com o jogo sem modificações:
-`port/recomp/recomp.py --no-slippi`. Ela desativa a inclusão das tabelas Slippi
-na tradução. Sua existência foi conferida; uma build vanilla não foi executada.
-Não comparar diretamente nosso comportamento vanilla com uma build modificada
-sem alinhar códigos, regras, saves, RNG e entradas.
+There is one option useful for comparing against the unmodified game:
+`port/recomp/recomp.py --no-slippi`. It disables the inclusion of the Slippi tables in the
+translation. Its existence was confirmed; a vanilla build was not run. Do not compare our
+vanilla behaviour directly against a modified build without aligning codes, rules, saves, RNG
+and inputs.
 
-## 2. Ponto de partida real do nosso port
+## 2. Our port's actual starting point
 
-O histórico de [port-mvp-progress.md](port-mvp-progress.md) registra Fox/Fox em
-Hyrule Temple, movimento, ataque, blaster, KO/renascimento em sondagem e a rota
-de resultados após cancelamento. A introdução desse documento ainda apresenta
-uma estimativa antiga de 40%, enquanto o histórico chega a 87%; esses números
-não são uma medição nova deste levantamento.
+The history in [port-mvp-progress.md](port-mvp-progress.md) records Fox/Fox on Hyrule Temple,
+movement, attack, blaster, KO/respawn under probing, and the results route after a
+cancellation. That document's introduction still shows an old estimate of 40%, while the
+history reaches 87%; those numbers are not a fresh measurement from this survey.
 
-O worktree está à frente de partes da documentação:
+The worktree is ahead of parts of the documentation:
 
-- [port/CMakeLists.txt](../port/CMakeLists.txt) já define
-  `melee-host-vs-stock-match-asset`: altera as regras pelo menu, escolhe uma vida,
-  provoca a queda de P1 e exige resultado com P2 vencedor, estoques `0/1` e volta
-  à seleção de personagens.
-- [match_trace.c](../port/src/game/match_trace.c) já expõe posição, ação, quedas,
-  regras e resultado; [main.cpp](../port/src/main.cpp) consome eventos
-  `FALLS`, `RULES` e `RESULT` no roteiro.
-- [baselib_support.c](../port/src/os/baselib_support.c) ainda retorna `NULL` em
-  `AXAcquireVoice`: o synth inicializa, mas nenhuma voz é disponibilizada.
-- O renderer já tem geração/cache de shaders TEV; fog e estado indireto
-  registrados na camada GX não significam que esses efeitos sejam aplicados
-  pelo shader apresentado.
+- [port/CMakeLists.txt](../port/CMakeLists.txt) already defines
+  `melee-host-vs-stock-match-asset`: it changes the rules through the menu, picks one stock,
+  makes P1 fall and requires a result with P2 as the winner, stocks `0/1`, and a return to
+  character selection.
+- [match_trace.c](../port/src/game/match_trace.c) already exposes position, action, falls,
+  rules and result; [main.cpp](../port/src/main.cpp) consumes `FALLS`, `RULES` and `RESULT`
+  events in the script.
+- [baselib_support.c](../port/src/os/baselib_support.c) still returns `NULL` from
+  `AXAcquireVoice`: the synth initializes, but no voice is made available.
+- The renderer already has TEV shader generation and caching; fog and indirect state recorded
+  in the GX layer do not mean those effects are applied by the presented shader.
 
-Portanto, o próximo passo para o KO é verificar e consolidar o teste existente.
-Não foi reexecutada a suíte do nosso port nesta tarefa; a presença do teste não
-é tratada como evidência de aprovação. As seis alterações locais preexistentes
-foram preservadas.
+So the next step towards the KO is to verify and consolidate the existing test. Our port's
+suite was not re-run in this task; the test's presence is not treated as evidence that it
+passes. The six pre-existing local changes were preserved.
 
-## 3. Mapa de referências por retorno esperado
+## 3. Map of references by expected return
 
-Os custos abaixo são estimativas relativas de adaptação, não prazos.
+The costs below are relative adaptation estimates, not schedules.
 
-| Prioridade | Referência no Unlocked | Aplicação aqui | Custo relativo |
+| Priority | Reference in Unlocked | Application here | Relative cost |
 | --- | --- | --- | --- |
-| P0 | [`validate_native.py`](../../melee-unlocked/tools/validate_native.py), [`replay_compare.py`](../../melee-unlocked/tools/replay_compare.py) | Comparar estados da luta e localizar o primeiro frame divergente | Baixo/médio para o método; alto para equivalência completa |
-| P0 | [`ax_ucode.cpp`](../../melee-unlocked/port/runtime/hle/ax_ucode.cpp), [`ax_ucode_test.cpp`](../../melee-unlocked/port/tests/ax_ucode_test.cpp) | Decoder/mixer AX, escrita de estado das vozes e testes com amostras conhecidas | Médio/alto |
-| P1 | [`gx_shader.cpp`](../../melee-unlocked/port/runtime/gx/gx_shader.cpp), [`gx_regs.h`](../../melee-unlocked/port/runtime/gx/gx_regs.h) | TEV indireto, fog, swaps e profundidade | Médio, por efeito |
-| P1 | [`texture_snapshot.h`](../../melee-unlocked/port/runtime/gx/texture_snapshot.h), [`texture_snapshot_test.cpp`](../../melee-unlocked/port/tests/texture_snapshot_test.cpp) | Garantir que cada draw retenha sua textura e paleta | Baixo para adaptar os testes |
-| P1 | [`hle_card.cpp`](../../melee-unlocked/port/runtime/hle/hle_card.cpp) | Saves em pasta GCI e contrato da API CARD | Médio |
-| P1 | [`hle_dvd.cpp`](../../melee-unlocked/port/runtime/hle/hle_dvd.cpp) | I/O em worker com entrega determinística | Médio; nossa fila já existe |
-| P2 | [`ppc.h`](../../melee-unlocked/port/runtime/ppc/ppc.h), [`ppc_runtime.cpp`](../../melee-unlocked/port/runtime/ppc/ppc_runtime.cpp) | Referência para diferenças de ponto flutuante | Alto para equivalência total |
-| P2 | [`authored_pose.cpp`](../../melee-unlocked/port/runtime/gx/authored_pose.cpp), [`subframe.cpp`](../../melee-unlocked/port/runtime/gx/subframe.cpp) | Apresentação acima de 60 Hz sem acelerar gameplay | Alto |
-| P3 | [`slippi_online.cpp`](../../melee-unlocked/port/runtime/hle/slippi_online.cpp), [`slippi_net.cpp`](../../melee-unlocked/port/runtime/hle/slippi_net.cpp) | Estudar protocolo, snapshots e sincronização | Muito alto no nosso layout nativo |
+| P0 | [`validate_native.py`](../../melee-unlocked/tools/validate_native.py), [`replay_compare.py`](../../melee-unlocked/tools/replay_compare.py) | Compare match states and locate the first divergent frame | Low/medium for the method; high for full equivalence |
+| P0 | [`ax_ucode.cpp`](../../melee-unlocked/port/runtime/hle/ax_ucode.cpp), [`ax_ucode_test.cpp`](../../melee-unlocked/port/tests/ax_ucode_test.cpp) | AX decoder/mixer, voice state writes and tests with known samples | Medium/high |
+| P1 | [`gx_shader.cpp`](../../melee-unlocked/port/runtime/gx/gx_shader.cpp), [`gx_regs.h`](../../melee-unlocked/port/runtime/gx/gx_regs.h) | Indirect TEV, fog, swaps and depth | Medium, per effect |
+| P1 | [`texture_snapshot.h`](../../melee-unlocked/port/runtime/gx/texture_snapshot.h), [`texture_snapshot_test.cpp`](../../melee-unlocked/port/tests/texture_snapshot_test.cpp) | Ensure each draw retains its texture and palette | Low, to adapt the tests |
+| P1 | [`hle_card.cpp`](../../melee-unlocked/port/runtime/hle/hle_card.cpp) | Saves in a GCI folder and the CARD API contract | Medium |
+| P1 | [`hle_dvd.cpp`](../../melee-unlocked/port/runtime/hle/hle_dvd.cpp) | Worker I/O with deterministic delivery | Medium; our queue already exists |
+| P2 | [`ppc.h`](../../melee-unlocked/port/runtime/ppc/ppc.h), [`ppc_runtime.cpp`](../../melee-unlocked/port/runtime/ppc/ppc_runtime.cpp) | Reference for floating-point differences | High for full equivalence |
+| P2 | [`authored_pose.cpp`](../../melee-unlocked/port/runtime/gx/authored_pose.cpp), [`subframe.cpp`](../../melee-unlocked/port/runtime/gx/subframe.cpp) | Presentation above 60 Hz without speeding up gameplay | High |
+| P3 | [`slippi_online.cpp`](../../melee-unlocked/port/runtime/hle/slippi_online.cpp), [`slippi_net.cpp`](../../melee-unlocked/port/runtime/hle/slippi_net.cpp) | Study the protocol, snapshots and synchronization | Very high in our native layout |
 
-## 4. Validação: provavelmente o ganho mais rápido
+## 4. Validation: probably the quickest win
 
-### 4.1 Separar três perguntas
+### 4.1 Separate three questions
 
-| Pergunta | Técnica encontrada | Limite |
+| Question | Technique found | Limit |
 | --- | --- | --- |
-| O renderer altera a simulação? | `validate_native.py` compara checkpoints em headless, janela escondida, renderer em thread e modo authored | Compara o Unlocked consigo mesmo |
-| O jogo reproduz a referência? | `replay_compare.py` compara estados de uma gravação `.slp` com a nova execução | Só observa parte do estado e tem lacunas de cobertura |
-| Frames extras têm imagem diferente? | [`diff_captures.py`](../../melee-unlocked/tools/diff_captures.py) conta pixels diferentes entre capturas PPM | Diferença visual não demonstra pose correta ou menor latência |
+| Does the renderer alter the simulation? | `validate_native.py` compares checkpoints in headless, hidden window, threaded renderer and authored mode | Compares Unlocked against itself |
+| Does the game reproduce the reference? | `replay_compare.py` compares the states of a `.slp` recording against a new run | Observes only part of the state and has coverage gaps |
+| Do the extra frames have a different image? | [`diff_captures.py`](../../melee-unlocked/tools/diff_captures.py) counts differing pixels between PPM captures | A visual difference does not demonstrate a correct pose or lower latency |
 
-O `validate_native.py` exige a quantidade solicitada de checkpoints e rejeita
-diagnósticos de MMIO inválido/FATAL. O runtime gera hashes de CPU, RAM e ARAM;
-o campo `events` resume parte do estado de eventos, não serializa toda a fila.
-O próprio script afirma que não verifica equivalência com Dolphin nem estado
-completo de rollback.
+`validate_native.py` requires the requested number of checkpoints and rejects invalid
+MMIO/FATAL diagnostics. The runtime produces hashes of CPU, RAM and ARAM; the `events` field
+summarizes part of the event state, it does not serialize the whole queue. The script itself
+states that it does not verify equivalence with Dolphin nor the full rollback state.
 
-### 4.2 Lacunas concretas do comparador de replays
+### 4.2 Concrete gaps in the replay comparator
 
-Na revisão examinada, `replay_compare.py`:
+In the revision examined, `replay_compare.py`:
 
-- Compara `state`, `x`, `y`, `facing`, `percent`, `stocks` e `char`, por
-  jogador/follower. Embora leia `shield`, não o inclui na comparação final.
-- Usa a **interseção** dos frames: um replay incompleto pode passar se os frames
-  em comum forem iguais. Não exige a mesma cobertura temporal.
-- Lê configurações e entradas, mas não as compara no laço final.
-- Compara floats como números Python, não como representações binárias.
-- Imprime o código de saída do executável, mas não o usa diretamente como
-  condição de reprovação se ainda encontrar uma gravação para comparar.
+- Compares `state`, `x`, `y`, `facing`, `percent`, `stocks` and `char`, per player/follower.
+  Although it reads `shield`, it does not include it in the final comparison.
+- Uses the **intersection** of the frames: an incomplete replay can pass if the frames they
+  have in common are equal. It does not require the same temporal coverage.
+- Reads settings and inputs, but does not compare them in the final loop.
+- Compares floats as Python numbers, not as binary representations.
+- Prints the executable's exit code, but does not use it directly as a failure condition as
+  long as it still finds a recording to compare.
 
-Ao adaptar, exigir cobertura de frames/jogadores, configuração compatível e
-execução bem-sucedida. Usar comparação binária quando a meta for determinismo
-bit a bit; tolerância numérica só serve a um critério explicitamente aproximado.
-O parser atual também não deve ser presumido um leitor genérico de toda versão
-de `.slp`.
+When adapting it, require frame/player coverage, a compatible configuration and a successful
+run. Use binary comparison when the goal is bit-for-bit determinism; numerical tolerance only
+serves an explicitly approximate criterion. The current parser should also not be assumed to
+be a generic reader for every `.slp` version.
 
-### 4.3 Aplicação proposta no nosso código
+### 4.3 Proposed application in our code
 
-Expandir a fachada já existente de `match_trace` para emitir, por tick, um
-registro canônico: cena, RNG, entradas, ação, posição, velocidade, dano,
-estoques, flags relevantes e resultado. Usar slots/IDs estáveis para objetos.
-Não hashear structs nativas inteiras: padding e endereços de 64 bits introduzem
-diferenças que não são diferenças de gameplay.
+Extend the existing `match_trace` facade to emit, per tick, a canonical record: scene, RNG,
+inputs, action, position, velocity, damage, stocks, relevant flags and result. Use stable
+slots/IDs for objects. Do not hash whole native structs: padding and 64-bit addresses
+introduce differences that are not gameplay differences.
 
-Primeiro comparar duas execuções nossas com o mesmo roteiro e assets. Depois
-comparar apresentação desligada/ligada. Finalmente confrontar uma referência
-externa com as mesmas condições e o mesmo ponto de amostragem no frame.
+First compare two of our own runs with the same script and assets. Then compare presentation
+off against on. Finally confront an external reference under the same conditions and with the
+same sampling point in the frame.
 
-**Aceite sugerido:** a rota atual até resultados produz os mesmos registros em
-execuções repetidas; qualquer divergência informa primeiro tick, entidade,
-campo e valores. O teste de estoque continua aprovando pelas condições já
-definidas no CMake.
+**Suggested acceptance:** the current route through to the results produces the same records
+across repeated runs; any divergence reports the first tick, entity, field and values. The
+stock test keeps passing under the conditions already defined in CMake.
 
-## 5. Áudio: uma implementação concreta para estudar
+## 5. Audio: a concrete implementation to study
 
-O Unlocked separa três camadas:
+Unlocked separates three layers:
 
-1. A biblioteca AX recompilada constrói listas de comandos e blocos de
-   parâmetros de voz; as pontes AI/DSP estão em
-   [`hle_stubs.cpp`](../../melee-unlocked/port/runtime/hle/hle_stubs.cpp).
-2. `ax_ucode.cpp` interpreta esses comandos e mistura áudio, acessando RAM/ARAM
-   por uma interface de callbacks definida em
+1. The recompiled AX library builds command lists and voice parameter blocks; the AI/DSP
+   bridges are in [`hle_stubs.cpp`](../../melee-unlocked/port/runtime/hle/hle_stubs.cpp).
+2. `ax_ucode.cpp` interprets those commands and mixes audio, accessing RAM/ARAM through a
+   callback interface defined in
    [`ax_ucode.h`](../../melee-unlocked/port/runtime/hle/ax_ucode.h).
-3. [`host/audio.cpp`](../../melee-unlocked/port/runtime/host/audio.cpp) entrega
-   blocos de PCM estéreo de 32 kHz ao dispositivo por WASAPI, com fallback WinMM.
+3. [`host/audio.cpp`](../../melee-unlocked/port/runtime/host/audio.cpp) delivers blocks of
+   32 kHz stereo PCM to the device through WASAPI, with a WinMM fallback.
 
-O mixer tem uma fronteira suficientemente pequena para estudo isolado: seu
-teste compila e passa no Linux. Isso não elimina o trabalho de integração.
-Nosso port precisa implementar a gestão das vozes, sincronizar os parâmetros,
-avançar o DSP no tempo virtual e devolver o estado esperado pelo synth. Não
-basta ligar uma saída SDL ao `AXAcquireVoice` atual.
+The mixer has a boundary small enough to study in isolation: its test compiles and passes on
+Linux. That does not remove the integration work. Our port has to implement voice management,
+synchronize the parameters, advance the DSP in virtual time and return the state the synth
+expects. Wiring an SDL output to the current `AXAcquireVoice` is not enough.
 
-Sequência proposta:
+Proposed sequence:
 
-1. Exercitar uma voz sintética ADPCM e validar PCM, endereço corrente e término.
-2. Implementar alocação/liberação e atualização dos parâmetros exigidos pelo
-   `synth.c`, escolhendo uma representação explícita para os blocos AX.
-3. Conectar ARAM e callbacks ao scheduler; conferir som real de menu/ataque.
-4. Gravar WAV antes de depender da saída em tempo real.
-5. Alimentar a saída SDL com buffer circular e medir underruns/overruns.
+1. Exercise a synthetic ADPCM voice and validate PCM, current address and termination.
+2. Implement allocation/release and the parameter updates `synth.c` requires, choosing an
+   explicit representation for the AX blocks.
+3. Connect ARAM and callbacks to the scheduler; check real menu/attack sound.
+4. Record WAV before depending on real-time output.
+5. Feed the SDL output through a ring buffer and measure underruns/overruns.
 
-O backend de áudio do Unlocked lida com a diferença entre o relógio da simulação
-e o relógio da placa de som ajustando gradualmente a taxa de consumo do buffer.
-Essa técnica é transferível; WASAPI/WinMM não são o backend adequado para nosso
-Linux. O tamanho de buffer deve ser medido aqui, não adotado como valor ideal.
+Unlocked's audio backend handles the difference between the simulation's clock and the sound
+card's clock by gradually adjusting the buffer's consumption rate. That technique transfers;
+WASAPI/WinMM are not the right backend for our Linux. The buffer size has to be measured here,
+not adopted as an ideal value.
 
-[`jukebox.cpp`](../../melee-unlocked/port/runtime/hle/jukebox.cpp) contém leitura
-de música HPS/DSP-ADPCM com looping, mas o acionamento responde aos comandos
-Slippi que substituem a música original. É referência de formato, não uma
-substituição automática do caminho de streaming vanilla.
+[`jukebox.cpp`](../../melee-unlocked/port/runtime/hle/jukebox.cpp) contains HPS/DSP-ADPCM
+music reading with looping, but the triggering responds to the Slippi commands that replace
+the original music. It is a format reference, not an automatic replacement for the vanilla
+streaming path.
 
-[`wav_stats.py`](../../melee-unlocked/tools/wav_stats.py) ajuda a detectar
-silêncio e amplitude. RMS não prova fidelidade: conferir também duração,
-looping, canais, saturação e amostras esperadas.
+[`wav_stats.py`](../../melee-unlocked/tools/wav_stats.py) helps detect silence and amplitude.
+RMS does not prove fidelity: also check duration, looping, channels, clipping and expected
+samples.
 
-## 6. GX: transferir a semântica e os testes
+## 6. GX: transfer the semantics and the tests
 
-### 6.1 Texturas e paletas precisam pertencer ao draw
+### 6.1 Textures and palettes must belong to the draw
 
-`TextureSnapshotCache` preserva bytes de imagem e paleta em snapshots imutáveis,
-com deduplicação por conteúdo. O teste verifica alteração da paleta no mesmo
-endereço, mudança em um mip posterior e validade após limpar a origem/cache.
+`TextureSnapshotCache` preserves image and palette bytes in immutable snapshots, deduplicated
+by content. The test verifies a palette change at the same address, a change in a later mip,
+and validity after clearing the source/cache.
 
-Isso se conecta diretamente ao erro de TLUT registrado no nosso histórico:
-capturar o estado depois do último draw pode usar uma paleta diferente daquela
-que existia quando o objeto foi desenhado. A correção já consta do nosso
-histórico; o ganho é ampliar a regressão com os casos do Unlocked.
+This connects directly to the TLUT bug recorded in our history: capturing the state after the
+last draw can use a different palette from the one that existed when the object was drawn. The
+fix is already in our history; the gain is broadening the regression with Unlocked's cases.
 
-Não substituir nossos leitores com validação de limites pelo decoder deles
-sem manter as garantias atuais. O teste de snapshot é pequeno e não certifica
-a segurança de todos os formatos ou streams malformados.
+Do not replace our bounds-checked readers with their decoder without keeping the current
+guarantees. The snapshot test is small and does not certify the safety of every format or of
+malformed streams.
 
-### 6.2 Fog, TEV indireto, swaps e profundidade
+### 6.2 Fog, indirect TEV, swaps and depth
 
-`gx_shader.cpp` oferece caminhos concretos de geração HLSL para fog, consultas
-indiretas de textura, seleção de canais e cálculo de profundidade. Usar junto
-de `gx_regs.h` para identificar as entradas da fórmula e expressá-las em nosso
-[tev.cpp](../port/src/gx/tev.cpp), conforme a necessidade de cada cena.
+`gx_shader.cpp` offers concrete HLSL generation paths for fog, indirect texture lookups,
+channel selection and depth computation. Use it alongside `gx_regs.h` to identify the
+formula's inputs and express them in our [tev.cpp](../port/src/gx/tev.cpp), as each scene
+requires.
 
-As convenções de profundidade/projeção do D3D12 não devem ser copiadas
-literalmente para OpenGL. Validar cada efeito com estado controlado e captura
-equivalente. `a_bump` no TEV indireto e geração de coordenadas `GX_TG_BUMPn`
-não são automaticamente a mesma implementação; nosso código ainda reporta
-`bump texgen` em `tev_unmodelled_features`.
+D3D12's depth/projection conventions must not be copied literally to OpenGL. Validate each
+effect with controlled state and an equivalent capture. `a_bump` in indirect TEV and
+`GX_TG_BUMPn` coordinate generation are not automatically the same implementation; our code
+still reports `bump texgen` in `tev_unmodelled_features`.
 
-### 6.3 Cópias de EFB e fila de frames
+### 6.3 EFB copies and the frame queue
 
-EFB é o framebuffer do console; suas cópias podem alimentar texturas usadas
-posteriormente. Em [`frame_queue.h`](../../melee-unlocked/port/runtime/gx/frame_queue.h)
-e [`threaded_backend.cpp`](../../melee-unlocked/port/runtime/gx/threaded_backend.cpp),
-frames são processados em ordem; quando há atraso, o renderer pode deixar de
-apresentar frames intermediários, preservando a execução dos comandos.
+The EFB is the console's framebuffer; its copies can feed textures used later. In
+[`frame_queue.h`](../../melee-unlocked/port/runtime/gx/frame_queue.h) and
+[`threaded_backend.cpp`](../../melee-unlocked/port/runtime/gx/threaded_backend.cpp), frames
+are processed in order; when there is a delay, the renderer may skip presenting intermediate
+frames while still executing the commands.
 
-Se paralelizarmos nosso renderer, descartar trabalho intermediário exige
-preservar essas dependências. Testar sombra/refração e transições com consumidor
-atrasado. O código atual limita a fila a 32 frames; o tracker menciona uma fila
-de quatro em uma etapa anterior. São estados históricos diferentes, não uma
-recomendação para nossa latência.
+If we parallelize our renderer, discarding intermediate work means preserving those
+dependencies. Test shadow/refraction and transitions with a lagging consumer. The current code
+limits the queue to 32 frames; the tracker mentions a queue of four at an earlier stage. Those
+are different historical states, not a recommendation for our latency.
 
-### 6.4 Cache de shaders e medição
+### 6.4 Shader cache and measurement
 
-O Unlocked normaliza chaves de shader pelos registradores relevantes e inclui
-hashes dos fontes de shader/layout/backend na identidade do cache. Há receitas
-de pré-compilação e pipelines genéricos enquanto o shader específico compila.
-O tracker relata que simplesmente pular draws causou objetos piscando.
+Unlocked normalizes shader keys by the relevant registers and includes hashes of the
+shader/layout/backend sources in the cache's identity. There are precompilation recipes and
+generic pipelines used while the specific shader compiles. The tracker reports that simply
+skipping draws made objects flicker.
 
-Nosso [`sdl_gl_renderer.cpp`](../port/src/render/sdl_gl_renderer.cpp) já guarda
-programas por fonte GLSL. Antes de adicionar workers ou cache persistente,
-medir quantas compilações novas e quanto tempo de compilação aparecem por luta.
-Um fallback aproximado pode preservar geometria, mas deve ser identificado
-como aproximação nas comparações de imagem.
+Our [`sdl_gl_renderer.cpp`](../port/src/render/sdl_gl_renderer.cpp) already keys programs by
+GLSL source. Before adding workers or a persistent cache, measure how many new compilations
+and how much compile time appear per match. An approximate fallback can preserve geometry, but
+it must be identified as an approximation in image comparisons.
 
-[`benchmark_native.py`](../../melee-unlocked/tools/benchmark_native.py) fornece
-um bom modelo: separar inicialização da partida, cache frio/quente, registrar
-hash do executável/roteiro e percentis p95/p99. Seus intervalos de submissão CPU
-não medem conclusão GPU nem latência física do controle até a tela.
+[`benchmark_native.py`](../../melee-unlocked/tools/benchmark_native.py) gives a good model:
+separate startup from the match, cold/warm cache, record the executable/script hash and the
+p95/p99 percentiles. Its CPU submission intervals measure neither GPU completion nor the
+physical latency from controller to screen.
 
-## 7. CARD e DVD: contratos úteis, com adaptação de ABI
+## 7. CARD and DVD: useful contracts, with ABI adaptation
 
-### Saves em GCI
+### GCI saves
 
-`hle_card.cpp` implementa uma pasta de arquivos `.gci`: entrada de diretório de
-64 bytes seguida dos blocos de dados de 8 KiB. O modelo implementado expõe
-slot A e trata slot B como ausente. Há resultados de erro da API, completions
-assíncronas e escrita por arquivo temporário seguida de renomeação.
+`hle_card.cpp` implements a folder of `.gci` files: a 64-byte directory entry followed by the
+8 KiB data blocks. The model implemented exposes slot A and treats slot B as absent. There are
+API error results, asynchronous completions and writes through a temporary file followed by a
+rename.
 
-Aplicação: dar persistência às regras/desbloqueios e permitir fixtures de save
-para testes. Isso também ajuda a ampliar os cenários hoje limitados pela SSS
-sem save. A ponte atual deles lê estruturas e callbacks em endereços PPC;
-nosso backend precisará receber os tipos/ponteiros nativos corretos.
+Application: give the rules/unlocks persistence and allow save fixtures for tests. That also
+helps broaden the scenarios currently limited by the SSS without a save. Their current bridge
+reads structures and callbacks at PPC addresses; our backend will have to receive the correct
+native types/pointers.
 
-Aceite: criar, salvar, fechar e reabrir; conferir erro de arquivo inexistente,
-capacidade e callback; executar cenários com pasta vazia e com fixture conhecida.
+Acceptance: create, save, close and reopen; check the error for a missing file, capacity and
+the callback; run scenarios with an empty folder and with a known fixture.
 
-### I/O assíncrono com tempo previsível
+### Asynchronous I/O with predictable timing
 
-`hle_dvd.cpp` lê em worker e agenda a conclusão para um prazo virtual fixo,
-descrito como um quarto de frame, mantendo a ordem dos pedidos. Se o worker
-ainda não terminou no prazo, a simulação espera. Portanto, o mecanismo reduz
-bloqueios antecipados, mas não garante ausência de stalls.
+`hle_dvd.cpp` reads in a worker and schedules completion for a fixed virtual deadline,
+described as a quarter of a frame, preserving request order. If the worker has not finished by
+the deadline, the simulation waits. The mechanism therefore reduces early blocking, but does
+not guarantee the absence of stalls.
 
-Nosso [`os/dvd.cpp`](../port/src/os/dvd.cpp) já entrega operações pelo scheduler.
-O ganho futuro é desacoplar a leitura física preservando instante e ordem
-observados pelo jogo. Testar leituras consecutivas, falha/truncamento e callback
-que agenda outra operação antes de otimizar throughput.
+Our [`os/dvd.cpp`](../port/src/os/dvd.cpp) already delivers operations through the scheduler.
+The future gain is decoupling the physical read while preserving the instant and order the
+game observes. Test consecutive reads, failure/truncation, and a callback that schedules
+another operation, before optimizing throughput.
 
-## 8. Determinismo, alta taxa de atualização e Slippi
+## 8. Determinism, high refresh rate and Slippi
 
-### Ponto flutuante
+### Floating point
 
-Os helpers PPC incluem arredondamento para single, ajuste de mantissa, FMA,
-conversões e estimativas de recíproco/raiz. O cabeçalho declara como alvo a
-semântica Jit64 de Slippi Dolphin no caminho indicado; isso não é comprovação
-de identidade universal com hardware.
+The PPC helpers include rounding to single, mantissa adjustment, FMA, conversions and
+reciprocal/root estimates. The header declares Slippi Dolphin's Jit64 semantics as the target
+on the path indicated; that is not proof of universal identity with the hardware.
 
-Nosso status registra uso residual de `libm` e diferenças potenciais de
-aliasing. Se a primeira divergência de gameplay apontar para matemática,
-comparar operações específicas com vetores de teste, incluindo sinais de zero,
-limites de conversão e arredondamento. Trocar funções isoladas pela referência
-não certifica o determinismo do jogo inteiro.
+Our status records residual use of `libm` and potential aliasing differences. If the first
+gameplay divergence points at maths, compare specific operations with test vectors, including
+signed zeros, conversion limits and rounding. Swapping isolated functions for the reference
+does not certify the whole game's determinism.
 
-### Apresentação acima de 60 Hz
+### Presentation above 60 Hz
 
-O princípio aproveitável é manter a simulação em 60 Hz e trabalhar sobre
-snapshots de apresentação. `authored_pose` captura canais de animação,
-hierarquia de joints, pesos e matrizes de envelope; o solver amostra poses
-fracionárias e preserva a pose atual quando a reconstrução não é suportada.
-Parte do movimento usa extrapolação, sujeita a limites e descontinuidades.
+The reusable principle is to keep the simulation at 60 Hz and work on presentation snapshots.
+`authored_pose` captures animation channels, joint hierarchy, weights and envelope matrices;
+the solver samples fractional poses and preserves the current pose when reconstruction is not
+supported. Part of the movement uses extrapolation, subject to limits and discontinuities.
 
-O código também distingue interpolação entre dois estados, que introduz um
-frame de atraso, de predição à frente do estado atual. A escolha exige medir
-qualidade e latência. Respawn, mudança de ação, câmera, efeitos e reutilização
-de endereços precisam de tratamento explícito.
+The code also distinguishes interpolation between two states, which introduces one frame of
+delay, from prediction ahead of the current state. The choice requires measuring quality and
+latency. Respawn, action changes, camera, effects and address reuse all need explicit
+handling.
 
-Já temos FObj/AObj/JObj nativos: usar a separação entre simulação e apresentação
-como referência, sem trocar a animação existente. Qualquer experimento deve
-passar pelo teste de isolamento de estado da seção 4.
+We already have native FObj/AObj/JObj: use the separation of simulation from presentation as a
+reference, without replacing the existing animation. Any experiment must pass the state
+isolation test from section 4.
 
-### Slippi exige mais que rede
+### Slippi takes more than networking
 
-`slippi_online.cpp` implementa savestates copiando regiões de RAM convidada e
-excluindo faixas específicas de áudio/VI. `exi_slippi.cpp`, `slippi_net.cpp` e
-`slippi_report.cpp` compõem outras partes do dispositivo e protocolo.
+`slippi_online.cpp` implements savestates by copying regions of guest RAM and excluding
+specific audio/VI ranges. `exi_slippi.cpp`, `slippi_net.cpp` and `slippi_report.cpp` make up
+other parts of the device and protocol.
 
-Esses endereços não representam os objetos do nosso heap nativo. Para rollback,
-será preciso restaurar objetos, referências, RNG, filas e estado relevante sem
-depender da localização ocasional das alocações. Isso deve orientar uma futura
-estratégia de IDs/arenas/serialização, não bloquear o MVP offline.
+Those addresses do not represent the objects in our native heap. For rollback we will have to
+restore objects, references, RNG, queues and relevant state without depending on where the
+allocations happen to land. That should guide a future IDs/arenas/serialization strategy, not
+block the offline MVP.
 
-O README anuncia online; o tracker contém evidência histórica mais restrita e
-trechos que ainda pedem validação contra Dolphin. Nenhum replay/log de uma
-sessão externa foi reproduzido aqui. Tratar compatibilidade como uma hipótese
-a testar, e evitar tomar um par de instâncias iguais como prova de equivalência
-com outro emulador.
+The README announces online; the tracker holds more limited historical evidence and passages
+that still ask for validation against Dolphin. No replay or log of an external session was
+reproduced here. Treat compatibility as a hypothesis to test, and avoid taking a pair of
+identical instances as proof of equivalence with another emulator.
 
-## 9. Condições para reproduzir a referência
+## 9. Conditions for reproducing the reference
 
-Há impedimentos concretos no checkout examinado:
+There are concrete obstacles in the checkout examined:
 
-- O [CMake principal](../../melee-unlocked/CMakeLists.txt) exige Windows x64/MSVC
-  para habilitar o executável experimental.
-- `native_animation` depende de `melee/src/sysdolphin/baselib/fobj.c`,
-  `fobj.h` e `spline.c` por meio de
-  [`generate_fobj_host.py`](../../melee-unlocked/tools/generate_fobj_host.py).
-  A pasta **interna** `melee-unlocked/melee/` não está presente e é ignorada pelo
-  Git. O nosso `../melee/` é outro checkout, não satisfaz automaticamente esse
-  caminho. Para reproduzir, resolver essa dependência e fixar sua revisão.
-- A geração de C++ em `port/generated/` é uma etapa separada a partir do DOL.
-  A presença do recompiler não significa que esses fontes gerados existam.
-- `HANDOFF_FABLE_3.md` e os relatórios citados no tracker não estão no checkout
-  examinado; os números de desempenho e partidas ali descritos são relatos do
-  projeto, não resultados reproduzidos nesta análise.
+- The [main CMake](../../melee-unlocked/CMakeLists.txt) requires Windows x64/MSVC to enable
+  the experimental executable.
+- `native_animation` depends on `melee/src/sysdolphin/baselib/fobj.c`, `fobj.h` and `spline.c`
+  through [`generate_fobj_host.py`](../../melee-unlocked/tools/generate_fobj_host.py). The
+  **internal** folder `melee-unlocked/melee/` is not present and is ignored by Git. Our
+  `../melee/` is a different checkout and does not automatically satisfy that path. To
+  reproduce, resolve that dependency and pin its revision.
+- The C++ generation in `port/generated/` is a separate step starting from the DOL. The
+  presence of the recompiler does not mean those generated sources exist.
+- `HANDOFF_FABLE_3.md` and the reports cited in the tracker are not in the checkout examined;
+  the performance figures and matches described there are the project's own reports, not
+  results reproduced in this analysis.
 
-O [README](../../melee-unlocked/README.md) declara GPL-2.0-or-later e origem de
-partes do runtime em Dolphin/Slippi. Os arquivos examinados trazem cabeçalhos
-SPDX e há [LICENSE](../../melee-unlocked/LICENSE) no projeto. Registrar origem,
-revisão e licença por componente se houver incorporação. Este levantamento não
-avalia a compatibilidade de licenças nem transfere código entre os projetos.
+The [README](../../melee-unlocked/README.md) declares GPL-2.0-or-later and that parts of the
+runtime originate in Dolphin/Slippi. The files examined carry SPDX headers and the project has
+a [LICENSE](../../melee-unlocked/LICENSE). Record origin, revision and license per component
+if anything is incorporated. This survey does not assess license compatibility and does not
+transfer code between the projects.
 
-## 10. Verificações executadas neste levantamento
+## 10. Checks run during this survey
 
-Compilação isolada com `c++ -std=c++17 -O2`, fora dos checkouts, em diretório
-temporário. Nenhum desses casos precisa de ISO ou acesso online.
+Isolated compilation with `c++ -std=c++17 -O2`, outside the checkouts, in a temporary
+directory. None of these cases needs an ISO or online access.
 
-| Verificação | Resultado observado | Alcance |
+| Check | Observed result | Scope |
 | --- | --- | --- |
-| `ax_ucode_test.cpp` + `ax_ucode.cpp` | Passou | ADPCM sintético, escrita de posição no bloco de voz, interleaving e controle de mix |
-| `texture_snapshot_test.cpp` + `gx_texture.cpp` | Passou | Paleta mutável, mips, ownership e deduplicação |
-| `port/tests/dol_validation_test.py` | 2 testes passaram | Header truncado e limites de seções DOL |
+| `ax_ucode_test.cpp` + `ax_ucode.cpp` | Passed | Synthetic ADPCM, position write into the voice block, interleaving and mix control |
+| `texture_snapshot_test.cpp` + `gx_texture.cpp` | Passed | Mutable palette, mips, ownership and deduplication |
+| `port/tests/dol_validation_test.py` | 2 tests passed | Truncated header and DOL section bounds |
 
-Os resultados demonstram que esses recortes podem ser exercitados no Linux.
-Não cobrem gameplay, backend D3D12, áudio real, performance, Slippi nem toda a
-segurança dos parsers.
+The results show that those slices can be exercised on Linux. They do not cover gameplay, the
+D3D12 backend, real audio, performance, Slippi, or the full safety of the parsers.
 
-Comandos reproduzíveis a partir da raiz `project-melee/`:
+Reproducible commands from the `project-melee/` root:
 
 ```sh
 review_dir=$(mktemp -d /tmp/melee-unlocked-checks.XXXXXX)
@@ -393,18 +373,17 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   melee-unlocked/port/tests/dol_validation_test.py
 ```
 
-## 11. Backlog sugerido, sem implementação nesta tarefa
+## 11. Suggested backlog, not implemented in this task
 
-| Ordem | Entrega | Critério de conclusão |
+| Order | Deliverable | Completion criterion |
 | --- | --- | --- |
-| 1 | Consolidar a rota existente de vitória por estoque | Teste de estoque aprovado, imagem dos marcos conferida e documentação coerente com o código |
-| 2 | Trace canônico da luta | Duas execuções e modos de apresentação com o mesmo estado; diagnóstico do primeiro campo divergente |
-| 3 | Primeira voz AX audível | Vetor sintético correto, WAV de som real e callbacks/estado de voz coerentes |
-| 4 | Correções GX guiadas por capturas | Um efeito por vez, testes de paleta/mips e cenas de sombra/refração sem regressão |
-| 5 | Mais conteúdo e saves | Próximo personagem escolhido por dependências de dados; fixture GCI reproduzível e luta completa |
-| 6 | Desempenho e apresentação desacoplada | Medição frio/quente, p95/p99 e isolamento da simulação preservado |
+| 1 | Consolidate the existing stock-victory route | Stock test passing, the milestone images checked and documentation consistent with the code |
+| 2 | Canonical match trace | Two runs and both presentation modes with the same state; diagnosis of the first divergent field |
+| 3 | First audible AX voice | Correct synthetic vector, a WAV of real sound and coherent callbacks/voice state |
+| 4 | Capture-guided GX fixes | One effect at a time, palette/mip tests and shadow/refraction scenes without regression |
+| 5 | More content and saves | Next character chosen by data dependencies; reproducible GCI fixture and a complete match |
+| 6 | Performance and decoupled presentation | Cold/warm measurement, p95/p99 and simulation isolation preserved |
 
-**Decisão sugerida:** manter a arquitetura atual e aproveitar componentes
-pequenos com testes junto. O Unlocked é especialmente valioso para transformar
-uma dúvida de implementação em uma comparação observável: qual estado, qual
-amostra de áudio ou qual draw difere, e em que momento.
+**Suggested decision:** keep the current architecture and take small components along with
+their tests. Unlocked is especially valuable for turning an implementation question into an
+observable comparison: which state, which audio sample or which draw differs, and when.

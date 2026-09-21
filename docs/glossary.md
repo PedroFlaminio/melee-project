@@ -1,160 +1,163 @@
-@page glossary Glossary
+# Glossary
 
-@section glossary_aabb AABB
+Abbreviations used throughout the Melee source. The names come from the original
+code, so several are Japanese or Metrowerks-era shorthand.
+
+## AABB
 Stands for "axis-aligned bounding box."
 
-@section glossary_accel accel
+## accel
 Short for "acceleration."
 
-@section glossary_amb amb
+## amb
 Short for "ambient."
 
-@section glossary_atk atk
+## atk
 Short for "attack."
 
-@section glossary_cam cam
+## cam
 Short for "camera."
 
-@section glossary_cb cb
+## cb
 Short for "callback."
 
-@section glossary_chan chan
+## chan
 Short for "channel."
 
-@section glossary_coll coll
+## coll
 Short for "collision(s)."
 
-@section glossary_cstick cstick
+## cstick
 Short for "camera stick," the yellow analog stick on the right side of the GameCube controller.
 
-@section glossary_cur cur
+## cur
 Short for "current" or "cursor."
 
-@section glossary_deg deg
+## deg
 Short for "degrees."
 
-@section glossary_dir dir
+## dir
 Short for "direction."
 
-@section glossary_div div
+## div
 Short for "divisor" or "divide."
 
-@section glossary_dmg dmg
+## dmg
 Short for "damage."
 
-@section glossary_dst dst
+## dst
 Short for "destination."
 
-@section glossary_dyn dyn
+## dyn
 Short for "dynamic."
 
-@section glossary_ecb ECB
+## ECB
 Stands for "environmental collision box."
 
-@section glossary_ft ft
+## ft
 Short for "fighter."
 
-@section glossary_gr gr
+## gr
 Short for "ground."
 
-@section glossary_grav grav
+## grav
 Short for "gravity."
 
-@section glossary_hatena hatena
+## hatena
 Japanese for "question [mark]."
 
-@section glossary_id id
+## id
 Short for "identifier." Not an acronym.
 
-@section glossary_idx idx
+## idx
 Short for "index."
 
-@section glossary_init init
+## init
 Short for "initial" or any form of the verb "initialize."
 
-@section glossary_it it
+## it
 Short for "item."
 
-@section glossary_kb kb
+## kb
 Short for "knockback."
 
-@section glossary_lstick lstick
+## lstick
 Short for "left stick," the gray analog stick on the GameCube controller.
 
-@section glossary_lr lr
+## lr
 Stands for "left/right." Synonymous with "facing direction."
 
-@section glossary_mag mag
+## mag
 Short for "magnitude."
 
-@section glossary_min min
+## min
 Short for "minimum."
 
-@section glossary_mul mul
+## mul
 Short for "multiplier" or "multiply."
 
-@section glossary_mv mv
-Stands for "motion variables." Used by #HSD_GObj::user_data structs (such as #Fighter::mv) to store polymorphic variables specific to an #MotionState.
+## mv
+Stands for "motion variables." Used by `HSD_GObj::user_data` structs (such as `Fighter::mv`) to store polymorphic variables specific to an `MotionState`.
 
-@section glossary_phys phys
+## phys
 Short for "physics."
 
-@section glossary_plat plat
+## plat
 Short for "platform."
 
-@section glossary_ply ply
+## ply
 Short for "player."
 
-@section glossary_pos pos
+## pos
 Short for "position."
 
-@section glossary_prev prev
+## prev
 Short for "previous."
 
-@section glossary_rad rad
+## rad
 Short for "radians."
 
-@section glossary_rot rot
+## rot
 Short for "rotation."
 
-@section glossary_sfx sfx
+## sfx
 Short for "sound effect(s)."
 
-@section glossary_spd spd
+## spd
 Short for "speed."
 
-@section glossary_sq sq
+## sq
 Short for "square."
 
-@section glossary_src src
+## src
 Short for "source."
 
-@section glossary_sz sz
+## sz
 Short for "size."
 
-@section glossary_tgt tgt
+## tgt
 Short for "target."
 
-@section glossary_unk unk
+## unk
 Short for "unknown."
 
-@section glossary_vec vec
+## vec
 Short for "vector."
 
-@section glossary_veg veg
+## veg
 Short for "vegetable."
 
-@section glossary_vel vel
+## vel
 Short for "velocity."
 
-@section glossary_vtx vtx
+## vtx
 Short for "vertex."
 
-@section glossary_vic vic
+## vic
 Short for "victim."
 
-@section glossary_yakumono yakumono
-Japanese for "punctuation marks" or special characters. Might just refer to "symbols" as in named members within an archive file. Used by #StageInfo::yakumono_param.
+## yakumono
+Japanese for "punctuation marks" or special characters. Might just refer to "symbols" as in named members within an archive file. Used by `StageInfo::yakumono_param`.
 
-@section glossary_zako zako
+## zako
 Zako (雑魚) is Japanese for "trash mob" in video games, literally "small fish." In Melee, this is used to refer to Fighting Wire Frames and possibly other enemies.

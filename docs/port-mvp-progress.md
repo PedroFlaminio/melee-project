@@ -1,285 +1,451 @@
-# Progresso do MVP do port nativo
+# Native port MVP progress
 
-## Definição de MVP
+## MVP definition
 
-Fluxo local completo: iniciar o executável, navegar de título para VS, escolher
-dois jogadores e um estágio, e concluir uma luta local com vídeo, entrada,
-áudio e resultado funcional.
+A complete local flow: start the executable, navigate from the title to VS, pick two players
+and a stage, and complete a local match with working video, input, audio and result.
 
-## Estado atual — 21 de setembro de 2026
+## Current state — 21 September 2026
 
-**Estimativa: 100% (faixa de confiança: 98–100%).** Tudo o que a definição
-acima descreve roda pelo código do jogo e tem teste: o executável abre, a
-rota vai do título ao VS, dois jogadores e um estágio são escolhidos, a luta
-termina com resultado, e a imagem, o som e a entrada estão conferidos — a
-entrada inclusive por tecla de verdade na janela, que leva a rota inteira
-sozinha. O que ainda falta está fora da definição (a lista vem depois da
-tabela), com uma exceção que nenhuma automação fecha: ninguém sentou e jogou
-uma partida para dizer se responde como no console. A tabela descreve o
-estado de cada área hoje; o registro no fim guarda a evolução desde a linha
-de base de 13 de setembro.
+**Estimate: 100% (confidence range: 98–100%).** Everything the definition above describes runs
+through the game's own code and has a test: the executable opens, the route goes from the
+title to VS, two players and a stage are picked, the match ends with a result, and image,
+sound and input are all checked — input including real key events in the window, which carry
+the whole route on their own. What is still missing lies outside the definition (the list
+follows the table), with one exception no automation can close: nobody has sat down and played
+a match to say whether it responds the way the console does. The table describes the state of
+each area today; the log at the end records the evolution since the 13 September baseline.
 
-| Área | Estado | Peso no MVP |
+| Area | State | MVP weight |
 | --- | --- | --- |
-| Plataforma host (memória, relógio, DVD virtual, input) | funcional e testada; roteiro de entrada com stick e quatro portas; as rotas roteirizadas congelam o relógio num instante fixo e se repetem; `--play` lê teclado e gamepad como pad 1 numa janela a 60 Hz, com D-pad e L e R digitais, cima positivo nos eixos do gamepad e o FPS no título; uma tecla de verdade enviada à janela faz o lutador correr e dar o jab; um teste manual achou o eixo Y invertido, já corrigido | 15% |
-| Assets e renderização HSD/GX | funcional para as cenas da rota VS, com a imagem conferida em BMP; as cópias da EFB em cor (retratos dos resultados, bolha da lupa) são rasterizadas na CPU a partir da captura do frame, sem a bolha da lupa conferida na imagem; o fog do jogo entra entre o TEV e o blend nos dois caminhos que desenham a captura; as texturas de profundidade, o bump e o TEV indireto entraram no presenter, e uma varredura de 725 símbolos de joint dá 100,0% dos 3.379.817 triângulos com o TEV avaliado por inteiro; faltam mipmaps e a conferência visual desses três contra uma referência | 20% |
-| Inicialização, título e menu principal | título e rota até o menu validados | 15% |
-| Configuração de VS | CSS, menu de regras e SSS com dois pads; ao sair dos resultados o modo ainda escolhe entre o desafiante e o aviso de prêmio, que rodam; seleção, regras em estoque e estágio conferidos pelo estado do jogo e pela imagem do menu de regras e da SSS | 10% |
-| Luta (fighters, stage, colisão, câmera, HUD, KO) | Fox, Mario e Link em Hyrule Temple pelo código do jogo: movimento, corrida, ataque, blaster, pausa e L+R+A+START; com um estoque P1 cai, a luta termina por eliminação, o "Game!" aparece e os resultados mostram o vencedor ("FOX"), a colocação e as estatísticas e voltam à CSS. Imagem conferida em BMP, com os retratos dos painéis e as luzes do estágio (`map_plit`) nos lutadores; do estágio, `ALDYakuAll` traduz em todos os arquivos e `yakumono_param` no
-bloco de zeros que Hyrule Temple guarda sem ler. Uma luta por tempo que termina empatada passa pela morte súbita (um estoque a 300%) e volta aos resultados com as colocações que ela decidiu | 30% |
-| Áudio, distribuição e regressão end-to-end | efeitos e música pelo código do jogo: o mixer AX do host toca os descritores dos `.ssm`, os comandos do `.sem` e o stream `.hps` num relógio de 5 ms preso aos retraces, com saída no dispositivo de som no `--play` e em WAV nas rotas; a música e um efeito batem com decodificadores de referência (correlação 1,000000); o reverb e o delay do jogo tocam nos barramentos aux, com o `HandleReverb` portado da assembly para C; duas rotas título → resultados → menu são testes; a rota de estoque dá o mesmo trace canônico entre execuções e entre o `host-debug` e um build `-O2`; sem apresentar, a luta roda a cerca de 200 frames por segundo no `-O2` e a 19 no `host-debug`; com `--play` a rota inteira fica em 60 | 10% |
+| Host platform (memory, clock, virtual DVD, input) | working and tested; input scripting with stick and four ports; the scripted routes freeze the clock at a fixed instant and repeat exactly; `--play` reads keyboard and gamepad as pad 1 in a 60 Hz window, with D-pad and digital L and R, up positive on the gamepad axes and the FPS in the title; a real key event sent to the window makes the fighter run and jab; a manual test found the Y axis inverted, since fixed | 15% |
+| HSD/GX assets and rendering | working for the VS route's scenes, with the image checked in BMP; the colour EFB copies (results portraits, magnifier bubble) are rasterized on the CPU from the frame's capture, with the magnifier bubble not yet confirmed in the image; the game's fog goes in between the TEV and the blend on both paths that draw the capture; depth textures, bump and indirect TEV landed in the presenter, and a sweep of 725 joint symbols gives 100.0% of 3,379,817 triangles with the TEV fully evaluated; mipmaps and a visual check of those three against a reference are still missing | 20% |
+| Startup, title and main menu | title and the route to the menu validated | 15% |
+| VS configuration | CSS, rules menu and SSS with two pads; on leaving the results the mode still chooses between the challenger and the prize notice, both of which run; selection, stock rules and stage checked against the game's state and against the image of the rules menu and the SSS | 10% |
+| Match (fighters, stage, collision, camera, HUD, KO) | Fox, Mario and Link on Hyrule Temple through the game's code: movement, running, attack, blaster, pause and L+R+A+START; with one stock P1 falls, the match ends by elimination, the "Game!" appears and the results show the winner ("FOX"), the placings and the statistics and return to the CSS. Image checked in BMP, with the panels' portraits and the stage's lights (`map_plit`) on the fighters; of the stage data, `ALDYakuAll` translates in every file and `yakumono_param` in the zeroed block Hyrule Temple keeps without reading. A timed match that ends in a draw goes through sudden death (one stock at 300%) and returns to the results with the placings it decided | 30% |
+| Audio, distribution and end-to-end regression | effects and music through the game's code: the host's AX mixer plays the `.ssm` descriptors, the `.sem` commands and the `.hps` stream on a 5 ms clock tied to the retraces, with output to the sound device in `--play` and to WAV on the routes; the music and one effect match reference decoders (correlation 1.000000); the game's reverb and delay play on the aux buses, with `HandleReverb` ported from assembly to C; two title → results → menu routes are tests; the stock route gives the same canonical trace across runs and between `host-debug` and an `-O2` build; without presenting, the match runs at about 200 frames per second at `-O2` and at 19 in `host-debug`; with `--play` the whole route stays at 60 | 10% |
 
-### Evidências verificadas
+### Verified evidence
 
-- Dados de estágio: com `ALDYakuAll` e `yakumono_param`, o `--sweep-archives`
-  passa de 886 símbolos de `game_data`, 884 traduzidos, para 1038 e 989. As
-  105 traduções novas são as 76 tabelas de script do item aleatório e os 29
-  `yakumono_param` que são um bloco de zeros; as 47 falhas novas são os
-  `yakumono_param` com parâmetros próprios, que param com nome. Na rota o
-  jogo passa a escrever o script do estágio no estado do item aleatório, e o
-  trace da rota de estoque fica igual nos 1739 frames.
-- Fog: o estado de `GXSetFog` passa a viajar com cada draw capturado, e o
-  shader do presenter e o rasterizador da CPU o aplicam entre o TEV e o
-  blend, sobre a profundidade do próprio fragmento (o w de clip), com a
-  mistura em inteiros nos dois lados. Comparando os mesmos frames com
-  `MELEE_HOST_FOG=0`: o título muda 3,6% dos pixels, o menu principal 89,8%,
-  a CSS 0,1% e a SSS 69,4% (média 49,9), onde o fundo distante passa de um
-  plasma roxo a azul escuro e os ícones ficam intactos; a luta em Hyrule
-  Temple não muda um pixel, porque a cena de luta não instala fog. A
-  conformidade do TEV roda metade dos casos com um fog que cai no meio da
-  curva: 0 divergências em 256 casos. Trace igual nos 1739 frames.
-- Teclado da janela por evento de verdade
-  (`port/tools/play_keyboard_probe.py`): com a tecla `d` enviada só para a
-  janela do `--play`, o pad 1 anda 109 a 131 unidades e passa por `Dash`; com
-  `j` fica no lugar e entra em `Attack11`; sem tecla fica em `Wait` no mesmo
-  x. E `port/tools/play_keyboard_match.py` joga a rota inteira pelo teclado —
-  título, menu, CSS, SSS, luta, pausa, saída por L+R+A+START e resultados até
-  voltar à CSS —, com o pad 2 no roteiro: três execuções seguidas dão as
-  mesmas cenas (título 1, menu 123, CSS 243, SSS 384, luta 533, resultados
-  808, CSS 1214), e uma captura da própria janela no frame 700 mostra Hyrule
-  Temple com os dois Fox, o relógio em 01:59:27 e o HUD. Falta uma pessoa
-  jogar e dizer se responde como no console, e o gamepad.
-- `ctest --preset host-debug`: 26/26 (os 14 curtos, os dados do Mario e do
-  Link, os dois de banco de som, o de áudio da rota e as sete rotas de VS,
-  estas com as vozes ligadas); 225/225 testes unitários; com `-j4` a suíte
-  leva 62,9 s, com as rotas entre 25 e 32 s.
-- Desafiante e aviso de prêmio, as duas cenas que faltavam ao modo VS:
-  `melee-host-vs-challenger-asset` deixa o save em 50 lutas, e ao sair dos
-  resultados o modo entra na cena 0x29 no frame 1620 — o BMP mostra "A new foe
-  has appeared!", o aviso "WARNING CHALLENGER APPROACHING" e a silhueta da
-  Jigglypuff — e o total lido depois da luta é 51.
-  `melee-host-vs-prize-asset` dá o troféu 0x55 pelo caminho do jogo no meio da
-  luta; a cena 0x27 começa no 1620 ("You got the Maxim Tomato trophy!"), um
-  botão a fecha e o modo segue para a CSS no 1910. A luta contra o desafiante
-  fica de fora: é num estágio próprio dele e contra uma CPU, e agora para com
-  o nome do símbolo de estágio que o host não traduz, onde antes dava
-  SIGSEGV.
-- Cópias da EFB em cor: na rota de estoque, `1450:EFBCOPY` acha 3 texturas
-  copiadas com até 893 cores, e o BMP do frame 1450 mostra os retratos do 2º
-  (Fox na pose de derrota, fundo vermelho) e do 1º (o rosto, fundo azul), que
-  antes eram pretos. Na luta, a cópia de 64×64 da lupa (`ifmagnify.c`, que
-  copia em 0,0 com limpeza) tem 327, 347 e 341 cores nos frames 1078, 1085 e
-  1092; a bolha não aparece no BMP do frame 1085, e isso não foi investigado. O BMP do frame 1450 sai igual antes e depois
-  dos atalhos do rasterizador e com os arquivos quentes em `-O2`, e o trace do
-  build `-O2` segue igual nos 1739 frames.
-- Dados de estágio: `map_plit`, `quake_model_set` e `itemdata` traduzem nos
-  estágios (`--sweep-archives`: `game_data` passa de 662 de 664 para 882 de
-  884, e as 4 falhas são as de antes). Na rota de estoque o trace segue igual;
-  no frame 850, com as luzes de Hyrule Temple nos lutadores, o céu não muda um
-  pixel e mudam a geometria iluminada (muro do castelo com diferença média de
-  20,7, grama 11,4, P1 24,9 e P2 19,8) e as sombras, que passam de uma view de
-  936 triângulos a duas de 468.
-- Barramentos aux: `melee-host-route-audio-asset` compara as referências com
-  `MELEE_HOST_AUDIO_AUX=0` (música e efeito 118 com correlação 1,000000) e roda
-  de novo com o reverb e o delay: a música, que não envia nada, segue igual, e
-  a diferença entre as duas gravações é zero antes do efeito e chega a 2564 no
-  meio segundo depois dele. O impulso no reverb do jogo fica em silêncio até o
-  primeiro pente devolver o que a pré-linha entregou (amostra 1852) e dá as
-  mesmas amostras em duas execuções. Na rota de estoque com aux o trace segue
-  igual e o WAV tem 8 amostras saturadas entre 16 e 20 s, onde antes não
-  havia nenhuma.
-- `melee-host-route-audio-asset`: título → START → menu → B, gravando o mixer
-  em WAV. A música `menu01.hps`, decodificada à parte, bate janela a janela
-  (67 janelas de 4000 amostras, pior correlação 1,000000 nos dois canais,
-  atravessando as junções de bloco do stream), e o efeito 118 de `main.ssm`,
-  com a música subtraída, dá 1,000000 nas duas vozes. Com o teste de fim de
-  voz antigo do mixer, as piores janelas caem a -0,66 e -0,53 e o teste falha.
-- Áudio e jogo: a rota de estoque dá o mesmo trace nos 1739 frames com as
-  vozes ligadas e desligadas (`MELEE_HOST_AUDIO=0`), e o build `-O2` o mesmo
-  trace com som, em 4,96 s.
-- `--play` (build `-O2`) com START roteirizado: `melee-pc` aparece no servidor
-  de som como fluxo tocando (não pausado) durante a música do menu, e o título
-  mostrou 60,1, 60,1 e 59,8 FPS.
-- `ctest --preset host-sanitize -V`: 26/26 com as sete rotas de VS, sem erro
-  do ASan, 225/225 unitários, a suíte inteira em 232,1 s. O UBSan só imprime:
-  37 pontos distintos, cinco deles nos callbacks do áudio e um só da morte
-  súbita (`gm_1601.c:3232`), descritos em `native_port_status.md`.
-- A cena de título, animações e a transição para o menu principal possuem testes
-  com assets locais.
-- `melee-host-vs-match-asset`: título (122 frames) → menu (120) → CSS (141) →
-  SSS (149) → luta (175) → resultados (406) → CSS (120) → menu, com dois pads
-  roteirizados. As duas portas abrem como HMN, os dois jogadores escolhem Fox,
-  START leva à SSS e o cursor escolhe Hyrule Temple (estágio 14 com Fox nos
-  slots 0 e 1). Na luta, a sombra, o stick e o botão A são conferidos; o pad 1
-  pausa depois que o HUD liga (frame 655) e sai com L+R+A+START. Nos
-  resultados, um botão passa da abertura e START nas duas portas marca os dois
-  prontos; o modo volta à CSS, e B segurado leva ao menu. 24,6 s no
-  `host-debug`.
-- `melee-host-vs-sudden-death-asset`: a regra padrão é tempo de dois minutos,
-  e a rota só mexe no relógio: `680:CLOCK=3` deixa 3 s com o HUD ligado, o
-  jogo esgota o tempo sozinho (`clock frame 950: 0s+59`), a luta acaba com
-  dois vencedores e o modo entra na morte súbita (cena 0x03 no frame 1034),
-  onde o pad 1 cai do estágio. Os resultados guardam o fim da luta por tempo
-  (`outcome 1 winners 2`, três estoques para cada um) com as colocações da
-  morte súbita (`places P1=2 P2=1`). Título (122) → menu (120) → CSS (141) →
-  SSS (149) → luta (501) → morte súbita (469) → resultados (407) → CSS (120),
-  31 s no `host-debug` (sob ASan a suíte dá 24/24 em 221,9 s, sem relato do
-  ASan e com um ponto novo do UBSan, o `team_standings[5]` de um vetor de
-  cinco em `gm_80166CCC`). A mesma rota sem o atalho do relógio, com os dois
-  minutos inteiros, dá a mesma sequência (a luta com 7.438 frames) e o mesmo
-  desfecho, em 49 s no build `-O2`. Nos BMPs: o "Time!" com o relógio em
-  00:00:00, o "Go!" da morte súbita com os dois em 300% e os resultados de
-  "Time Battle" com 1st e 2nd.
-- `melee-host-vs-stock-match-asset`: na CSS o menu de regras troca tempo por
-  estoque e baixa o estoque de 3 a 1; na luta P1 cai do estágio, o jogo encerra
-  a luta por eliminação (desfecho 2, P2 vencedor) e os resultados de uma luta
-  concluída voltam à CSS. Título (122) → menu (120) → CSS (361) → SSS (149) →
-  luta (460) → resultados (407) → CSS (120) → menu, 32,2 s no `host-debug`.
-- A imagem dessa rota em BMP: menu de regras ("Stock 01"), SSS, luta com o
-  HUD, "Game!" e resultados com o título "FOX", 2nd e 1st e "READY FOR THE
-  NEXT BATTLE".
-- Trace canônico (`TRACE=`): a rota de estoque dá os mesmos 1739 frames entre
-  duas execuções simultâneas, entre execuções em horas diferentes e entre o
-  `host-debug` e o build `-O2`.
-- Build `-O2` (`build/host-release`, fora dos presets): 205/205 testes
-  unitários; a rota de estoque em 5,2 s sem apresentar, com a luta a 199,7
-  frames por segundo, os resultados a 226,5, a SSS a 266 e o resto acima de
-  1400.
-- `--play` (build `-O2`): com presenter escondido e o roteiro de estoque, a
-  rota inteira a 59,5–60 frames por segundo, com o mesmo desfecho; a janela
-  visível abriu no Wayland e rodou o título a 60,02.
-- `--diagnose-local-match` materializa dados de duas pessoas, regras e estágio,
-  mas ainda não inicia a cena de combate.
+- Stage data: with `ALDYakuAll` and `yakumono_param`, `--sweep-archives` goes from 886
+  `game_data` symbols, 884 translated, to 1038 and 989. The 105 new translations are the 76
+  script tables of the random item and the 29 `yakumono_param` that are a zeroed block; the 47
+  new failures are the `yakumono_param` with parameters of their own, which stop by name. On
+  the route the game now writes the stage's script into the random item's state, and the stock
+  route's trace stays identical across all 1739 frames.
+- Fog: the `GXSetFog` state now travels with every captured draw, and the presenter's shader
+  and the CPU rasterizer apply it between the TEV and the blend, over the fragment's own depth
+  (the clip w), with integer blending on both sides. Comparing the same frames with
+  `MELEE_HOST_FOG=0`: the title changes 3.6% of the pixels, the main menu 89.8%, the CSS 0.1%
+  and the SSS 69.4% (mean 49.9), where the distant background goes from a purple plasma to
+  dark blue and the icons stay intact; the Hyrule Temple match does not change a single pixel,
+  because the match scene installs no fog. TEV conformance runs half its cases with a fog that
+  falls mid-curve: 0 divergences across 256 cases. Trace identical across the 1739 frames.
+- Window keyboard through real events (`port/tools/play_keyboard_probe.py`): with the `d` key
+  sent only to `--play`'s window, pad 1 walks 109 to 131 units and passes through `Dash`; with
+  `j` it stays put and enters `Attack11`; with no key it stays in `Wait` at the same x. And
+  `port/tools/play_keyboard_match.py` plays the whole route from the keyboard — title, menu,
+  CSS, SSS, match, pause, the L+R+A+START exit and the results through to the return to the
+  CSS — with pad 2 in the script: three consecutive runs give the same scenes (title 1, menu
+  123, CSS 243, SSS 384, match 533, results 808, CSS 1214), and a capture of the window itself
+  at frame 700 shows Hyrule Temple with both Foxes, the clock at 01:59:27 and the HUD. A person
+  playing and saying whether it responds like the console is still missing, as is the gamepad.
+- `ctest --preset host-debug`: 26/26 (the 14 short ones, the Mario and Link data, the two sound
+  bank ones, the route audio one and the seven VS routes, these with voices on); 225/225 unit
+  tests; with `-j4` the suite takes 62.9 s, with the routes between 25 and 32 s.
+- Challenger and prize notice, the two scenes the VS mode was missing:
+  `melee-host-vs-challenger-asset` leaves the save at 50 matches, and on leaving the results
+  the mode enters scene 0x29 at frame 1620 — the BMP shows "A new foe has appeared!", the
+  "WARNING CHALLENGER APPROACHING" notice and Jigglypuff's silhouette — and the total read
+  after the match is 51. `melee-host-vs-prize-asset` awards trophy 0x55 through the game's own
+  path mid-match; scene 0x27 starts at 1620 ("You got the Maxim Tomato trophy!"), a button
+  closes it and the mode continues to the CSS at 1910. The match against the challenger is out
+  of scope: it is on a stage of its own and against a CPU, and it now stops with the name of
+  the stage symbol the host does not translate, where it used to SIGSEGV.
+- Colour EFB copies: on the stock route, `1450:EFBCOPY` finds 3 copied textures with up to 893
+  colours, and the BMP of frame 1450 shows the 2nd place portrait (Fox in the defeat pose, red
+  background) and the 1st (the face, blue background), which used to be black. In the match,
+  the magnifier's 64×64 copy (`ifmagnify.c`, which copies at 0,0 with a clear) has 327, 347 and
+  341 colours at frames 1078, 1085 and 1092; the bubble does not appear in frame 1085's BMP,
+  and that has not been investigated. Frame 1450's BMP comes out identical before and after the
+  rasterizer's shortcuts and with the hot files at `-O2`, and the `-O2` build's trace stays
+  identical across the 1739 frames.
+- Stage data: `map_plit`, `quake_model_set` and `itemdata` translate across the stages
+  (`--sweep-archives`: `game_data` goes from 662 of 664 to 882 of 884, and the 4 failures are
+  the ones from before). On the stock route the trace stays identical; at frame 850, with
+  Hyrule Temple's lights on the fighters, the sky does not change a pixel and what changes is
+  the lit geometry (castle wall with a mean difference of 20.7, grass 11.4, P1 24.9 and P2
+  19.8) and the shadows, which go from one view of 936 triangles to two of 468.
+- Aux buses: `melee-host-route-audio-asset` compares against the references with
+  `MELEE_HOST_AUDIO_AUX=0` (music and effect 118 at correlation 1.000000) and runs again with
+  reverb and delay: the music, which sends nothing, stays identical, and the difference between
+  the two recordings is zero before the effect and reaches 2564 in the half second after it.
+  The impulse into the game's reverb stays silent until the first comb returns what the
+  pre-delay delivered (sample 1852) and gives the same samples across two runs. On the stock
+  route with aux the trace stays identical and the WAV has 8 clipped samples between 16 and
+  20 s, where before there were none.
+- `melee-host-route-audio-asset`: title → START → menu → B, recording the mixer to WAV. The
+  `menu01.hps` music, decoded separately, matches window by window (67 windows of 4000 samples,
+  worst correlation 1.000000 on both channels, crossing the stream's block junctions), and
+  effect 118 of `main.ssm`, with the music subtracted, gives 1.000000 on both voices. With the
+  mixer's old end-of-voice test, the worst windows drop to -0.66 and -0.53 and the test fails.
+- Audio and game: the stock route gives the same trace across all 1739 frames with voices on
+  and off (`MELEE_HOST_AUDIO=0`), and the `-O2` build the same trace with sound, in 4.96 s.
+- `--play` (`-O2` build) with a scripted START: `melee-pc` appears in the sound server as a
+  stream that is playing (not paused) during the menu music, and the title showed 60.1, 60.1
+  and 59.8 FPS.
+- `ctest --preset host-sanitize -V`: 26/26 with the seven VS routes, no ASan report, 225/225
+  unit tests, the whole suite in 232.1 s. UBSan only prints: 37 distinct points, five of them
+  in the audio callbacks and one only in sudden death (`gm_1601.c:3232`), described in
+  `native_port_status.md`.
+- The title scene, animations and the transition to the main menu all have tests with local
+  assets.
+- `melee-host-vs-match-asset`: title (122 frames) → menu (120) → CSS (141) → SSS (149) → match
+  (175) → results (406) → CSS (120) → menu, with two scripted pads. Both ports open as HMN,
+  both players pick Fox, START leads to the SSS and the cursor picks Hyrule Temple (stage 14
+  with Fox in slots 0 and 1). In the match, the shadow, the stick and the A button are checked;
+  pad 1 pauses after the HUD comes on (frame 655) and exits with L+R+A+START. On the results, a
+  button gets past the opening and START on both ports marks both ready; the mode returns to
+  the CSS, and B held leads to the menu. 24.6 s in `host-debug`.
+- `melee-host-vs-sudden-death-asset`: the default rule is a two-minute time limit, and the
+  route only touches the clock: `680:CLOCK=3` leaves 3 s with the HUD on, the game runs the
+  time out on its own (`clock frame 950: 0s+59`), the match ends with two winners and the mode
+  enters sudden death (scene 0x03 at frame 1034), where pad 1 falls off the stage. The results
+  keep the end of the timed match (`outcome 1 winners 2`, three stocks each) with sudden
+  death's placings (`places P1=2 P2=1`). Title (122) → menu (120) → CSS (141) → SSS (149) →
+  match (501) → sudden death (469) → results (407) → CSS (120), 31 s in `host-debug` (under
+  ASan the suite gives 24/24 in 221.9 s, with no ASan report and one new UBSan point, the
+  `team_standings[5]` of a five-element array in `gm_80166CCC`). The same route without the
+  clock shortcut, with the full two minutes, gives the same sequence (a match of 7,438 frames)
+  and the same outcome, in 49 s in the `-O2` build. In the BMPs: the "Time!" with the clock at
+  00:00:00, sudden death's "Go!" with both at 300% and the "Time Battle" results with 1st and
+  2nd.
+- `melee-host-vs-stock-match-asset`: on the CSS the rules menu swaps time for stock and lowers
+  the stock from 3 to 1; in the match P1 falls off the stage, the game ends the match by
+  elimination (outcome 2, P2 the winner) and the results of a completed match return to the
+  CSS. Title (122) → menu (120) → CSS (361) → SSS (149) → match (460) → results (407) → CSS
+  (120) → menu, 32.2 s in `host-debug`.
+- That route's image in BMP: rules menu ("Stock 01"), SSS, match with the HUD, "Game!" and
+  results with the title "FOX", 2nd and 1st and "READY FOR THE NEXT BATTLE".
+- Canonical trace (`TRACE=`): the stock route gives the same 1739 frames between two
+  simultaneous runs, between runs at different hours, and between `host-debug` and the `-O2`
+  build.
+- `-O2` build (`build/host-release`, outside the presets): 205/205 unit tests; the stock route
+  in 5.2 s without presenting, with the match at 199.7 frames per second, the results at 226.5,
+  the SSS at 266 and everything else above 1400.
+- `--play` (`-O2` build): with the hidden presenter and the stock script, the whole route at
+  59.5–60 frames per second, with the same outcome; the visible window opened under Wayland and
+  ran the title at 60.02.
+- `--diagnose-local-match` materializes two players' data, the rules and the stage, but does
+  not yet start the combat scene.
 
-## O que fica fora do MVP
+## What is outside the MVP
 
-Nada disto está na definição do MVP, e nada disto impede a luta local:
+None of this is in the MVP definition, and none of it blocks the local match:
 
-- Uma pessoa jogando. A janela responde a tecla de verdade e o teclado leva a
-  rota inteira, mas ninguém jogou uma partida para dizer se o jogo responde
-  como no console; o gamepad não foi tocado, e o eixo Y dele só tem teste
-  unitário.
-- Da imagem: mipmaps (a minificação usa o filtro de magnificação), o ajuste de
-  alcance do fog, `GXEnableTexOffsets` e `GXSetTevSwapModeTable`. Bump
-  (`GX_TG_BUMPn`), as texturas de profundidade (`GX_ZT_REPLACE` com Z8, Z16 e
-  Z24X8) e o TEV indireto da refração entraram; o que falta neles é a
-  conferência visual contra uma referência, porque nenhum tem imagem comparada.
-- Do som: nenhuma comparação do reverb, do ITD ou do surround com o console,
-  amostra a amostra. O ITD e o surround já são tocados pelo mixer.
-- Dos estágios: os `yakumono_param` dos 47 arquivos com parâmetros próprios,
-  um layout por estágio. Hyrule Temple segue como alvo por estar liberado sem
-  cartão de memória e ter o menor módulo (`grshrine.c`); Final Destination e
-  Battlefield ficam travados na SSS sem dados salvos.
-- Do modo VS: a luta contra o desafiante, que é num estágio próprio dele e
-  contra uma CPU — o anúncio roda, a luta para com o nome do símbolo de
-  estágio que o host não traduz.
-- Fora do VS: os outros modos de jogo, o cartão de memória, o CARD e o THP.
+- A person playing. The window responds to real key events and the keyboard carries the whole
+  route, but nobody has played a match to say whether the game responds the way the console
+  does; the gamepad has not been touched, and its Y axis only has a unit test.
+- From the image: mipmaps (minification uses the magnification filter), the fog range
+  adjustment, `GXEnableTexOffsets` and `GXSetTevSwapModeTable`. Bump (`GX_TG_BUMPn`), depth
+  textures (`GX_ZT_REPLACE` with Z8, Z16 and Z24X8) and the refraction's indirect TEV have
+  landed; what is missing in them is the visual check against a reference, because none of them
+  has a compared image.
+- From the sound: no sample-by-sample comparison of reverb, ITD or surround against the
+  console. ITD and surround are already played by the mixer.
+- From the stages: the `yakumono_param` of the 47 files with parameters of their own, one
+  layout per stage. Hyrule Temple remains the target because it is unlocked without a memory
+  card and has the smallest module (`grshrine.c`); Final Destination and Battlefield stay
+  locked on the SSS without saved data.
+- From the VS mode: the match against the challenger, which is on a stage of its own and
+  against a CPU — the announcement runs, the match stops with the name of the stage symbol the
+  host does not translate.
+- Outside VS: the other game modes, the memory card, CARD and THP.
 
-Pendências encontradas no primeiro teste manual de `--play`:
+Items found in the first manual `--play` test:
 
-- [x] Inverter o eixo Y do analógico principal do gamepad SDL antes de gravá-lo
-  em `PADStatus.stickY`; teclado já usa cima como valor positivo, mas
-  `SDL_GAMEPAD_AXIS_LEFTY` usa cima como negativo. Os dois eixos verticais
-  (analógico e C-stick) trocam de sinal em `gamepad_axis_y`
-  (`port/src/render/play_window.hpp`), com teste unitário; não havia gamepad
-  ligado para conferir na mão.
-- [x] Exibir no título da janela o FPS de apresentação, atualizado
-  periodicamente, para tornar visível o ritmo real durante a partida. A janela
-  visível mostra "Melee PC — 60.0 FPS — …" duas vezes por segundo; no build
-  `-O2`, lido com `wmctrl` numa janela X11, o título deu 60,0, 59,8 e 60,0 aos
-  3, 6 e 9 s.
+- [x] Invert the Y axis of the SDL gamepad's main analog stick before writing it into
+  `PADStatus.stickY`; the keyboard already uses up as positive, but `SDL_GAMEPAD_AXIS_LEFTY`
+  uses up as negative. Both vertical axes (analog and C-stick) flip sign in `gamepad_axis_y`
+  (`port/src/render/play_window.hpp`), with a unit test; there was no gamepad connected to
+  check by hand.
+- [x] Show the presentation FPS in the window title, updated periodically, to make the real
+  pace visible during a match. The visible window shows "Melee PC — 60.0 FPS — …" twice a
+  second; in the `-O2` build, read with `wmctrl` on an X11 window, the title gave 60.0, 59.8
+  and 60.0 at 3, 6 and 9 s.
 
-### Limite operacional atual
+### Current operational limit
 
-O `host-debug` roda as duas rotas de VS em 30 e 25 s, e o build `-O2`, que dá
-o mesmo trace, em poucos segundos. Os avisos desse build (177 variáveis possivelmente não inicializadas e 43
-funções sem `return`) são a lista de onde procurar valores que no console vêm
-de registrador, como os que estragavam os resultados. O roteiro de integração
-continua falhando se duas amostras `MOVE` não detectarem deslocamento de pelo
-menos 0,1 unidade.
+`host-debug` runs the two VS routes in 30 and 25 s, and the `-O2` build, which gives the same
+trace, in a few seconds. That build's warnings (177 possibly uninitialized variables and 43
+functions with no `return`) are the list of where to look for values that on the console come
+from a register, like the ones that were spoiling the results. The integration script still
+fails if two `MOVE` samples do not detect a displacement of at least 0.1 units.
 
-## Registro de atualizações
+## Update log
 
-| Data | Percentual | Mudança/evidência |
-| --- | ---: | --- |
-| 2026-09-13 | 25% | Linha de base criada; infraestrutura, título e menu parcial validados. |
-| 2026-09-13 | 25% | UI de memory card isolada no host; rota validada até `GM_VS (0x02)`. |
-| 2026-09-13 | 25% | CSS, SSS e regras de menu passaram a compilar/linkar no core host; falta conectá-los e executá-los. |
-| 2026-09-13 | 25% | `GM_VS`, CSS e SSS registrados na tabela host. CSS inicia e para explicitamente no tradutor ausente de `MnSelectChrDataTable`; não há crash silencioso. |
-| 2026-09-13 | 30% | `MnSelectChrDataTable` passou a materializar câmera, luzes, fog e nove modelos CSS no layout host; carga verificada com `MnSlChr.usd`. |
-| 2026-09-13 | 35% | `MnSelectStageDataTable` passou a materializar câmera, luzes, fog, 11 modelos e o modelo aleatório SSS; carga verificada com `MnSlMap.usd`. |
-| 2026-09-13 | 35% | CSS parava em `sislib.c:95` ("Memory Empty"): o pool SIS de 0x2400 bytes da cena é medido para o PowerPC. Pool dobrado e blocos alinhados a ponteiro sob `MELEE_HOST`; a CSS passa a rodar. |
-| 2026-09-13 | 40% | CSS e SSS executadas com entrada de dois pads (stick e portas no roteiro de `--run-modes`); seleção Fox/Fox em Hyrule Temple validada; cena ausente (`GS_VS`) para com nome. Teste `melee-host-vs-selection-asset`. |
-| 2026-09-13 | 40% | `host-sanitize` voltou a ligar (`gm_80177724` parado com nome). A rota VS sob ASan achou dois bugs de host: leitura além da tabela de estágios da SSS (agora com os bytes que o console lê) e shape animation lendo vértices big-endian como nativos (`pobj.c`), que corrompia todo modelo com shape animation. |
-| 2026-09-13 | 40% | Sondagem da luta (`GS_VS` na tabela, sem commit): primeira onda de link com 437 símbolos indefinidos em ~75 arquivos, a maior parte do núcleo de lutador. Inventário em `fight_flow_port.md`. |
-| 2026-09-13 | 40% | `host-sanitize` sem exclusões de instrumentação (dead stripping dos globais do ASan e `-z start-stop-gc`). Instrumentar os 30 arquivos antes excluídos achou um estouro de pilha no menu, leituras fora de vetor e deslocamentos indefinidos, corrigidos. 741 dos 808 `.c` fora do core já compilam. |
-| 2026-09-13 | 42% | Toda a decomp de `src/melee` compila no host e está no core (808 arquivos, mais o sistema de partículas do baselib). As rotas existentes não mudaram; a luta pode ser ligada sem acrescentar fontes. `atan2f`, `acosf` e `asinf` passaram a ser as do jogo, no lugar das da glibc. |
-| 2026-09-13 | 45% | A cena de luta (`GS_VS`) liga sem símbolo indefinido (partículas, textura indireta e offsets de textura no GX do host). Com a cena na tabela, a rota entra na luta e para no primeiro dado sem tradutor, `lbRefData`. |
-| 2026-09-13 | 45% | `lbRefData` traduzido, com teste unitário. A entrada da luta passa pela refração e para nos efeitos: `effCommonDataTable` e os bancos de partícula, que relocam ponteiros de 32 bits no lugar e pedem um loader próprio do host. |
-| 2026-09-14 | 46% | Loader de partículas do host: `eff*DataTable` e `map_ptcl`/`map_texg` viram bancos já localizados em largura de ponteiro, com bytes de comando, texels e paletas verbatim; os 76 símbolos de partícula do disco traduzem. Joints de spline traduzidos. A entrada da luta passa pelos efeitos e para em `plLoadCommonData` (`PdPm.dat`). |
-| 2026-09-14 | 46% | `plLoadCommonData` (limiares de bônus e truques) traduzido, com teste unitário. A entrada da luta passa pelos dados de jogador e pelo começo do estágio e cai em `Ground_801C0754`: a entrada de Hyrule Temple em `stage_datas` é nula, porque o host liga os estágios por referência fraca. |
-| 2026-09-14 | 46% | A tabela de estágios de `ground.c` liga forte (sem `host_weak_stages.h`), sem símbolo indefinido e com as rotas nos mesmos frames. A entrada da luta acha Hyrule Temple, lê `GrSh.dat` e para nos dados de estágio, que o host ainda não traduz (`map_head`, `coll_data`, `grGroundParam` e mais cinco). |
-| 2026-09-14 | 47% | `grGroundParam` (parâmetros e linhas `StageParam` de cada estágio) traduzido, com teste; os 71 `Gr*.dat` traduzem. `--load-archive` e `--sweep-archives` passam a registrar os tradutores C do jogo (varredura: `game_data` 170/170). A entrada da luta passa por `Ground_801C28CC` e para no display de troféus, que pede as sete tabelas de `TyDatai.usd`. |
-| 2026-09-14 | 48% | As sete tabelas de troféu de `TyDatai.usd` traduzidas (vetores de structs de escalares terminados por -1), com teste. A entrada do estágio termina (`Stage_802251E8` retorna) e a luta para dois passos adiante, nos dados comuns de item (`itPublicData`, `ItCo.usd`). |
-| 2026-09-14 | 48% | Levantamento de `itPublicData`: 43 itens comuns, 8 dos 118 de personagem e 47 Pokémon em `ItCo.usd`, 11 blocos de atributos próprios com ponteiros e scripts de estado lidos por bit-fields sobre `u32`, o mesmo formato dos scripts de lutador. Plano em `fight_flow_port.md`. |
-| 2026-09-14 | 49% | Scripts de comando no host: a API de arquivo converte as palavras dos scripts para a ordem nativa, as structs de bit-field do host são geradas de `lb/types.h` com os campos invertidos (255 campos conferidos contra o modelo do MWCC) e sub-rotina e goto usam distâncias relativas. Vale para itens, lutadores e sobreposição de cor; nos 150 scripts de estado de `ItCo.usd` a regra de parada vale. |
-| 2026-09-14 | 51% | `itPublicData` traduzido: dados comuns, 98 `Article` (43 comuns, 8 de personagem, 47 Pokémon) com atributos, hurtboxes, estados com animações e scripts, modelos e a tabela de cor, mais as restrições RObj de bytecode dos modelos. Atributos próprios por tipo de item e dinâmica ficam de fora, com parada nomeada ao criar o item. A entrada da luta passa pelos itens e pelo áudio e para no `map_head` do estágio. |
-| 2026-09-14 | 53% | `map_head` traduzido (69 de 71 estágios): modelos com câmera, luzes e fog, pares, splines, overrides de luz com o mesmo `HSD_LightDesc*` das luzes dos modelos (a contagem no disco é o dobro da tabela, e o jogo lê além dela) e os materiais dos modelos. A entrada da luta passa pelo estágio e pela câmera e para nos dados comuns de lutador (`ftLoadCommonData`, `PlCo.dat`). |
-| 2026-09-14 | 55% | `ftLoadCommonData` traduzido: as 23 tabelas comuns de lutador (`ftCommonData`, partes por tipo, scripts de cor, tremor, modificadores, `CrowdConfig` e as tabelas da IA de CPU), com teste. A entrada da luta passa pela inicialização dos jogadores e para em `Fighter_Create`, nos dados do Fox (`ftDataFox`, `PlFx.dat`). |
-| 2026-09-14 | 55% | Levantamento de `ftData*`: os 24 campos de `ftDataFox`, tabelas de ação cujos 10.091 scripts (58 arquivos de personagem) obedecem à conversão de comandos fora das cópias do Kirby, atributos próprios por personagem, itens, dinâmica e hurtboxes, e `x54`, declarado `int` mas ponteiro no disco. Plano em `fight_flow_port.md`. |
-| 2026-09-14 | 58% | `ftDataFox` traduzido (atributos, ações, partes, dinâmica, hurtboxes, itens, SFX e IK), com teste. Endereços de animação em largura de ponteiro; fila de ARAM (`lbarq.c`) montada no boot, com a espera síncrona dando passos no escalonador; e, no `map_head`, o joint de cada entrada de pares, sem o qual os lutadores nasciam na posição lida da pilha. A entrada da luta cria os dois Fox e para no menu de pausa (`ScGamPause_scene_data`, `GmPause.dat`). |
-| 2026-09-14 | 59% | `_scene_data` na API de arquivo: `SceneDesc` com modelos, câmeras, luzes e fogs e suas animações; câmeras e fogs são vetores sem terminador, contados pelas entradas com descritor até a próxima fronteira. Os 43 do disco traduzem e carregam (1.495 objetos), com teste. A entrada da luta carrega o menu de pausa e a cena do HUD e para nos modelos do HUD (`ScInfCnt_scene_models`). |
-| 2026-09-14 | 60% | `_scene_models` na API de arquivo e as tabelas do HUD sem sufixo (`Stc_scemdls`, `Stc_rarwmdls`, `tdsce`, `lupe`), com teste; os 26 do disco carregam (268 JObjs). `lbBgFlashColAnimData` traduzido. A montagem da cena de luta (`fn_8016E730`) termina; a entrada para nos dígitos de dano do HUD, onde `ifStatus_802F6194` anda por um JObj com o layout de GObj. |
-| 2026-09-14 | 61% | `ifStatus_802F6194` anda pelo próprio JObj no host (no console `next_gx` e `next` do GObj caem sobre `child` e `next` do JObj). A entrada da cena de luta termina e a cena entra no laço de frames: o primeiro frame roda os procs e para no desenho, ao projetar a caixa de câmera de um lutador com posição fora da faixa (`lbvector.c:383`). |
-| 2026-09-14 | 62% | O NaN do primeiro frame era da câmera: `Camera_ApplyQuake` lia a descrição da câmera pelo layout de statics em sequência do console e gravava NaN na translação de tremor. No host a função lê `cm_803BCB64` direto. O primeiro frame desenha, e a luta segue até os procs de um frame seguinte, onde o sistema de partículas guarda endereços de gerador em `u32`. |
-| 2026-09-14 | 64% | Lote de correções de layout de 32 bits achadas pela rota da luta sob ASan: endereços de gerador de partícula em `u32`, a visão `UnkX` do `IfDamageState`, structs lidas sobre statics em sequência (`lbrefract.c`, `ftmaterial.c`, `ft_800852B0`), segmentos de colisão e o pool de `HSD_psAppSRT` alocados com o tamanho do console, a posição da luz do lutador em floats, a matriz 3x4 de `lbVector_WorldToScreen` e a cor do HUD convertida para `s8`. As listas de símbolos de `lbarchive.c`, terminadas num `0` que o x86-64 passa com a metade alta indefinida, viram vetores de ponteiros. Todos os 13 arquivos pré-processam idênticos sem `MELEE_HOST`. Com `GS_VS` só local, a luta entra no laço de frames; sob ASan os lutadores chegam aos scripts de comando da animação e param em `Command_04` (`lbcommand.c:57`), no `RebirthWait`, com leitura de endereço inválido. |
-| 2026-09-14 | 65% | O SEGV em `Command_04` era o opcode lido dos bits errados: `ftAction_80073240` despacha por `gmScriptEventDefault` (`ft/types.h`), bit-fields fora de `lb/types.h` que o gerador de layouts não cobre, e o host tirava o opcode dos seis bits baixos da palavra. Com os campos invertidos sob `MELEE_HOST` (teste unitário; `ftaction.c` pré-processa idêntico sem o define), a luta com `GS_VS` só local roda o laço de frames sem erro: 600 frames da luta em ~60 s no `host-debug` e 400 s sob ASan, sem terminar sozinha. Sem a entrada: 194/194 e ctest 15/15 nos dois presets, rota VS em 20,0 s sob ASan. |
-| 2026-09-14 | 68% | `GS_VS` entra na tabela do host e a rota VS atravessa a luta pelo código do jogo: Fox vs. Fox em Hyrule Temple roda 175 frames, o HUD libera a pausa no frame 655, START na porta 1 pausa e L+R+A+START encerra a luta como no contest; `gm_Scene_Vs_OnExit` monta o resultado, o modo volta à CSS (o host não tem a tela de resultados) e B segurado leva ao menu. Teste `melee-host-vs-match-asset` no lugar de `melee-host-vs-selection-asset`: 27,3 s no `host-debug`, 127,1 s sob ASan, sem erro do ASan. 194/194 e ctest 15/15 nos dois presets. |
-| 2026-09-14 | 70% | Primeira imagem da luta: `--run-modes` aceita `FRAME:BMP=arquivo` e desenha aquele frame pelo presenter escondido. Na rota do teste, o frame 640 mostra Hyrule Temple, o "Go!", o cronômetro em 02:00, P1 e P2 com 0% e o emblema da Star Fox; o 675 tem o cronômetro em 01:59.69; o 695 mostra o menu de pausa do P1 com a legenda L R A START. Problemas vistos: no 560 o letreiro de início sai como quadriláteros brancos, no mesmo frame em que uma textura C8 não decodifica ("TLUT index exceeds palette"); a câmera fica colada na parte de baixo do estágio e os lutadores não aparecem; o frame 400 (SSS) sai quase todo azul. 194/194 e ctest 15/15 nos dois presets; teste da luta em 26,9 s no `host-debug` e 123,4 s sob ASan, sem erro do ASan. |
-| 2026-09-14 | 71% | Os quadriláteros brancos eram paleta errada: o frame é lido depois do último draw, e a textura pedia a paleta pelo nome (`GX_TLUT0`), que já guardava a de outro draw. O recorder GX passa a guardar a paleta de cada draw junto da textura capturada, e o decodificador deixa o padding dos blocos fora da paleta (dois testes unitários). Os frames 560 e 600 mostram o letreiro "Ready", a contagem, o céu e os estandartes de Hyrule Temple, sem textura recusada nos cinco frames capturados. A câmera segue colada no estágio, com os lutadores fora do quadro. 196/196 e ctest 15/15 nos dois presets; teste da luta em 26,8 s no `host-debug` e 125,3 s sob ASan, sem erro do ASan. |
-| 2026-09-14 | 73% | `coll_data` traduzido (71 de 71 estágios, com o layout levantado antes nos arquivos). Sem ele o jogo usava um mapa de colisão vazio, e os lutadores caíam depois do Ready com a câmera atrás deles (medido sob gdb: y de 22 a -201 entre os frames 340 e 440 do modo). Com a colisão os dois pousam em Hyrule Temple e a câmera fica no estágio. O pouso achou dois pontos, corrigidos sob `MELEE_HOST`: `fn_8001E60C` terminava uma lista de FObj por um ponteiro nunca atribuído quando a parte só tem trilhas de translação (SIGSEGV), e `fn_8002113C` copiava um quaternion num `Vec3` da pilha (ASan). Nos frames 640 e 675 o estágio aparece inteiro, mas os lutadores não são desenhados. 197/197 e ctest 15/15 nos dois presets; teste da luta em 27,3 s no `host-debug` e 124,6 s sob ASan, sem erro do ASan; 21 pontos do UBSan. |
-| 2026-09-14 | 74% | Os lutadores passam a ser desenhados. `ftDrawCommon_800805C8` só desenha o corpo com `x21FC_flag.b7`, e `fighter.c:747` liga essa flag gravando `byte = 1` no union `UnkFlagStruct`. No console esse byte é o bit `b7`, porque o MWCC aloca bit-fields a partir do bit mais alto; no host ele ligava `b0`. Sob `MELEE_HOST` o union declara os bits na ordem inversa. A captura mais que dobra (28.459 triângulos no frame 560), mas os lutadores saem como planos enormes de cor chapada que tomam a tela e escondem o estágio. 197/197 e ctest 15/15 nos dois presets; teste da luta em 56,6 s no `host-debug` e 260,0 s sob ASan, sem erro do ASan; 24 pontos do UBSan. |
-| 2026-09-14 | 76% | Os dois Fox aparecem no tamanho certo sobre Hyrule Temple. Os planos gigantes eram vértices sem a translação da câmera: o recorder GX do host guardava a matriz de normal nas mesmas linhas da matriz de posição, e o HSD carrega a inversa transposta, que não tem translação, logo depois da posição de todo PObj iluminado. O host passou a guardar as matrizes de normal à parte, como o GX (teste unitário). O esqueleto já estava certo (medido sob gdb). Cada `FRAME:BMP=` imprime o relatório da captura, com views e sequências de draw. Resta uma faixa preta grande sobre o estágio, sem causa medida. 198/198 e ctest 15/15 nos dois presets; teste da luta em 56,7 s no `host-debug` e 260,3 s sob ASan, sem erro do ASan; 24 pontos do UBSan. |
-| 2026-09-14 | 76% | Causa da faixa preta medida: é a sombra projetada dos lutadores. O passo de sombra desenha fundo branco e a silhueta em cinza num alvo de 256x256 e copia com `GXCopyTex` (`GX_CTF_R4`) para uma textura de 4 bits alocada sem zerar. O host só registra a cópia, e a textura fica com o que havia na memória. Num experimento local, sem commit, encher a cópia de branco apagou a faixa nos frames 560 e 640. Branco também apaga a sombra; a correção é o host produzir a cópia a partir do que o passo de sombra desenhou. |
-| 2026-09-14 | 77% | `GXCopyTex` agora materializa no host a cópia I4 usada por `HSD_ShadowEndRender`: rasteriza a geometria já capturada do passe sem textura (retângulo branco e silhueta em cinza) e a codifica no tile GX 8×8, em vez de deixar a textura sem inicialização. O teste `I4 EFB copies rasterize the recorded shadow mask` verifica máscara, codificação e o despacho por `GX_CTF_R4`; 199/199 testes unitários e 14/14 testes CTest fora da rota longa de VS. A captura completa Fox/Fox ainda deve confirmar visualmente a sombra. |
-| 2026-09-14 | 78% | A rota Fox/Fox inteira confirma a cópia de sombra sem depender de SDL: `640:SHADOW` encontra duas texturas I4 de 256×256 e 7.338 bytes não brancos no frame 640. A checagem passa a fazer parte de `melee-host-vs-match-asset`; se não houver textura ou a máscara estiver vazia, o roteiro falha. O ambiente atual não expõe dispositivo de vídeo, por isso a inspeção de pixels por BMP continua pendente, mas a causa da faixa preta foi removida no caminho real. |
-| 2026-09-14 | 78% | Iniciada telemetria C de posição dos fighters, isolada atrás de `melee_host_match_fighter_position` para não importar os headers PPC no executável C++. Ao manter o stick na luta, o processo esgotou memória antes da segunda amostra; a execução foi interrompida. Registrada amostra inicial dos dois Fox no frame 640, sem alegar resposta de movimento. |
-| 2026-09-14 | 80% | Resposta ao stick validada sem repetir o estouro: cinco frames de `SX=127` para P1 moveram sua posição de x=-92,7 para x=-65,1; P2 permaneceu em x=91,8. `640:MOVE` e `660:MOVE` entram em `melee-host-vs-match-asset` e fazem o roteiro falhar se nenhum Fox se deslocar mais de 0,1. A próxima lacuna funcional é botões de combate, KO e resultados. |
-| 2026-09-14 | 82% | Botão A validado. O ASan localizou o SIGSEGV pós-A em `mpFloorGetLeft`: os walkers de extremidade de piso truncavam `groundCollLine` a `int`; sob `MELEE_HOST` agora preservam o ponteiro de 64 bits. P1 vai de `ftCo_MS_Wait` (14) a `ftCo_MS_Attack11` (44) entre os frames 640 e 650. A rota VS passa a apertar A e falha se a amostra de `ACTION` não mudar; `melee-host-vs-match-asset` passa em 57,6 s. Restam KO e resultados. |
-| 2026-09-14 | 83% | A corrida não trava mais. A "falta de memória" ao segurar o stick era um laço infinito: no frame 670 o script da corrida do Fox (timers assíncronos 8, 13 e 20 e um goto de volta) girava criando o efeito 1022, cerca de 550 MB/s, porque a animação terminava em vez de repetir. `fighter.c` grava as flags da ação inteiras em `fp->x594_s32` e o jogo lê a flag de repetição, as máscaras de partes e o tipo da FigaTree por bit-fields que o MWCC conta a partir do bit mais alto; o host lia a repetição do bit 1 em vez do 30. Sob `MELEE_HOST` o union declara os bits a partir do menos significativo (teste unitário). Segurando o stick do frame 641 ao 1400, P1 corre de x=-92,7 a 42,3 e o processo fica em 162 MB até o frame 1300. Os seis walkers de teto e parede de `mplib.c` deixam de truncar `groundCollLine`. 200/200 testes unitários. |
-| 2026-09-14 | 83% | Tela de resultados em andamento. A luta cancelada vai aos resultados como no console: `gm_Mode_Vs_States` volta a ser a tabela do console e `GS_RESULTS` entra na tabela de cenas. `pnlsce`/`flmsce` (`GmRst`) traduzem como `SceneDesc` e os blocos `ftDemo*MotionFile*` de todos os personagens são entregues como estão (varredura: `game_data` 662/664, `scene_data` 47/47). A entrada dos resultados achou três leituras por estáticos em sequência, corrigidas sob `MELEE_HOST`: a câmera de `CameraKindData`, os quatro objetos lidos como `ResultsDisplayLayout` e `ftMapping_list` lida 32 bytes depois de `"PdPm.dat"` (índice 116 para o Fox e FigaTree de lixo). 201/201 testes unitários. |
-| 2026-09-14 | 86% | Tela de resultados de ponta a ponta pelo código do jogo: a rota do teste passa por CSS (141 frames), SSS (149), luta (175), resultados (406) e volta à CSS (120), e B leva ao menu. A tela só sai quando cada humano aperta START na própria porta, e cada START alterna entre pronto e não pronto. Saindo dela, o jogo ia para o aviso de prêmio (`GS_PRIZE_INTERFACE`), que o host não tem: um troféu (0x10C) era concedido porque o total de VS passava de 10.000. A soma vinha do `xE` de cada jogador, que `gm_80166378` grava por `fn_80166A8C`, uma conversão de float para `u16` pelo fast cast do SDK escrita só em assembly; no host a função não gravava nada e `xE` pegava lixo da pilha. Sob `MELEE_HOST` ela grava o `u16` com saturação (teste unitário). `melee-host-vs-match-asset` agora cobre os resultados. Sob ASan a rota apontou uma cor de canal iluminado `NaN` convertida para `u8` no recorder GX; ela passa a gravar 0 (teste unitário). 203/203 testes unitários. |
-| 2026-09-14 | 87% | O especial neutro do Fox funciona: B parava com nome no item 74 (a arma do blaster), porque o host deixa de fora os atributos próprios de todo item. Em `PlFx.dat` os três itens que o Fox registra (tiro, arma, ilusão) têm atributos só de floats (0x28, 0x28 e 8 bytes, sem relocação dentro) e nenhuma dinâmica; o tradutor de `ftDataFox` passa esses tamanhos por slot e traduz os floats. Na rota, B leva P1 às ações 341–343 e de volta a `Wait`. Correr para trás também funciona (`Turn` → `Dash` → `Run`), e P1 para na parede do estágio: o jogo guarda os vértices de colisão transformados pelo joint do mapa, a 0,9 vezes as coordenadas do arquivo, e a parede fica em x -139,23. Numa sonda, P1 pula a parede, cai do estágio, entra em `DeadDown` e renasce na plataforma: o KO roda pelo código do jogo. |
-| 2026-09-15 | 89% | Luta levada até o fim. Na CSS o menu de regras de `mnmainrule.c` roda: parava com SIGSEGV num JObj de endereço cortado, porque `mn_80231634` devolve o filho de um JObj como o `int` em +10 do console; sob `MELEE_HOST` devolve `intptr_t` com o `child` do host (três arquivos pré-processam idênticos sem o define). O menu troca tempo por estoque e baixa o estoque de 3 a 1. Com um estoque, P1 cai do estágio e o jogo encerra a luta por eliminação; os resultados de uma luta concluída (desfecho 2, P2 vencedor) passam da abertura sozinhos, pedem um botão para sair do vencedor, que consome só o primeiro botão do frame, e START em cada porta, e voltam à CSS. `--run-modes` imprime cada cena ao começar e ganha as sondas `RULES` e `RESULT`. Teste `melee-host-vs-stock-match-asset`, 235,2 s no `host-debug` (4 a 5 frames por segundo); 203/203 unitários e 16/16 no ctest. |
-| 2026-09-15 | 90% | Resultados e HUD com a imagem certa. Capturas BMP da rota de estoque conferem o menu de regras, a SSS (que não sai mais azul), a luta e o "Game!"; nos resultados o título dizia "NO CONTEST" numa luta concluída, os retratos eram ruído, o Fox fazia outra pose e o HUD mostrava outro emblema. A causa é `gm_80168B34`, que dá o frame das animações de textura de nome, emblema, retrato e ícone de estoque: seu C só atribui `base` para Zelda, Sheik, Popo e os personagens depois de Sheik, e o código de máquina do DOL (o arquivo é `Matching`) usa no caminho restante o `r3` que ainda guarda `ckind`. No host o valor vinha da pilha (frames 33554432 e 21845 sob gdb). Sob `MELEE_HOST` `base` começa em `ckind`, e `gm_80168BF8`, que termina sem `return` e no host devolvia o `eax` como float aos ícones de estoque, devolve a chamada; as macros ficam em `gm_1601.h` e o arquivo pré-processa igual sem o define. O título mostra "FOX", os painéis o nome e a colocação, e o HUD o emblema da Star Fox; os retratos ficam pretos, porque são cópias da EFB (`gm_1798.c`) que o host não produz. Teste unitário com os casos lidos do código de máquina. |
-| 2026-09-15 | 90% | Rotas repetíveis, trace canônico e build `-O2`. `FIRST-LAST:TRACE=arquivo` grava por frame a cena, a semente e ação, animação, posição, velocidade, direção, chão ou ar, dano e estoques de cada lutador, e `port/tools/compare_match_trace.py` aponta o primeiro campo diferente. A primeira comparação achou a semente dependendo da hora: o título sorteia um `HSD_Rand` por segundo do minuto corrente, e o relógio congelava na hora do host, o que mudava a pose de vitória. As rotas roteirizadas congelam em 3/12/2001 00:00:00 (teste unitário), e a rota de estoque dá o mesmo trace nos 1739 frames entre execuções em horas diferentes e entre o `host-debug` e um build `-O2`. Esse build roda a rota em 57,6 s, mas a luta fica em 16,2 frames por segundo e os resultados em 15,1, um quarto dos 60 Hz; seus avisos listam 177 pontos de variável possivelmente não inicializada e 43 funções sem `return`, entre eles o `gm_80168B34` original. `host-debug` 16/16 (rota de estoque em 246,3 s) e 205/205 unitários. |
-| 2026-09-15 | 90% | A luta roda sem gargalo de CPU. Num build `-O2 -pg`, o `gprof` pôs 92% do tempo da rota de estoque em `finish_draw_locked`: ao fim de cada draw o recorder GX refazia as posições de todos os triângulos já capturados no frame, e não só as do draw que terminava, um custo quadrático num frame de luta com cerca de 25 mil triângulos. Cada draw guarda agora o seu primeiro triângulo. No `-O2` a rota cai de 57,6 s para 5,2 s, com a luta a 199,7 frames por segundo (eram 16,2) e os resultados a 226,5 (15,1); no `host-debug` a suíte inteira leva 32,2 s (a rota de estoque levava 246,3 s). Oito BMPs da rota, as contagens de triângulos e o trace saem iguais aos de antes, fora os retratos dos resultados, cópias da EFB sem conteúdo definido que já variavam entre execuções. `host-debug` 16/16 e 205/205 unitários. |
-| 2026-09-15 | 91% | Modo jogável. `melee-pc --play assets-local` roda os modos a partir do título numa janela a 60 Hz, com o teclado e o primeiro gamepad como pad 1 e o relógio do OS na hora do host; um modo ou uma cena que o host não tem (o filme de abertura que segue o título parado) volta ao título, e fechar a janela encerra o processo. Com presenter escondido (`MELEE_HOST_PLAY_HIDDEN=1`) e o roteiro de estoque, o build `-O2` faz título → menu → regras → SSS → luta → resultados → CSS → menu a 59,5–60 frames por segundo, com o mesmo desfecho e os BMPs gravados; a janela visível abriu e manteve o título a 60,02. Ninguém jogou com teclado ou gamepad ainda, e o mapa não tem D-pad nem L e R digitais. `host-debug` 16/16; sob ASan a suíte passou em 146 s, com os mesmos 28 pontos do UBSan. |
-| 2026-09-15 | 91% | O pad do `--play` fica completo: o teclado numérico (8, 4, 2, 6) dá o D-pad, H e L dão o L e o R com o clique digital que o L+R+A+START da pausa lê, e no gamepad o D-pad e os gatilhos no fim do curso fazem o mesmo. Os bits vão direto ao `PADStatus.button`; nenhuma tecla real foi apertada ainda. `host-debug` e build `-O2` compilam limpos, 205/205 unitários. |
-| 2026-09-15 | 91% | Primeiro passo do áudio: o formato dos bancos `.ssm` conferido nos bytes (o `pred_scale` de 280 vozes em três bancos é o cabeçalho do quadro ADPCM no endereço corrente) e `port/tools/ssm_to_wav.py`, decodificador de referência que gera WAV sem saturação e com durações coerentes. O host ainda não entrega voz AX, não monta os descritores de amostra e não lê os comandos do `.sem`. |
-| 2026-09-15 | 91% | Mixer AX do host no lugar das fachadas de voz: pool de 64 vozes com o roubo por prioridade do SDK, setters com a semântica de `AXVPB.c` e quadros de 5 ms que decodificam DSP ADPCM, PCM16 e PCM8, reamostram, aplicam envelope e mix e só então chamam o callback do synth. As vozes ficam desligadas por padrão, porque uma voz abre caminhos de efeitos e música que o host ainda não tem; oito verificações sintéticas passam. `host-debug` 16/16, 213/213 unitários. |
-| 2026-09-15 | 91% | O mixer AX do host decodifica as vozes reais igual à referência: `melee-pc --decode-sound-bank` e `ssm_to_wav.py --compare-host` dão as mesmas amostras nas 456 vozes de nove bancos (efeitos, personagens, Pokémon e as falas do título), e um desvio de uma unidade no Python aparece em todas as vozes comparadas. Dois testes com asset entram na suíte; `host-debug` 18/18 e, sob ASan, 213/213 unitários e os testes de banco sem relato novo. |
-| 2026-09-15 | 91% | Pendências do primeiro teste manual do `--play`: o gamepad SDL dá cima como negativo, e os dois eixos verticais passam a trocar de sinal antes de `PADStatus` (`gamepad_axis_y`, `port/src/render/play_window.hpp`), como o W do teclado; a janela visível mostra os frames por segundo no título duas vezes por segundo (60,0, 59,8 e 60,0 lidos com `wmctrl` no build `-O2`). Três testes unitários cobrem eixos, medidor e título; sem gamepad ligado, o eixo foi conferido só por eles. `host-debug` 18/18, 216/216 unitários. |
-| 2026-09-15 | 94% | O jogo toca efeitos e música. `synth.c` monta no host os descritores dos `.ssm` em largura de ponteiro (registro do arquivo e sons num bloco, readdress e deflag próprios), o `.sem` tem os fluxos de comando convertidos na carga, a razão de reamostragem deixa de ser gravada como uma palavra sobre dois `u16` e o stream `.hps` converte cabeçalho e blocos. O relógio AX roda um quadro de 5 ms por 5 ms de campo a cada retrace, as vozes ligam nas rotas e no `--play`, que toca no dispositivo de som e passa a esperar um campo NTSC por frame, e `WAV=` grava o mixer. Comparar a música com um decodificador à parte achou o mixer voltando ao início do bloco a cada amostra depois de laçar para o bloco seguinte (33 e 96 amostras repetidas): o fim agora dispara só no endereço seguinte ao fim, como o acelerador do DSP. `OSGetSoundMode` responde estéreo. Música por janela e efeito 118 com correlação 1,000000; trace igual com e sem som; `host-debug` 19/19, 217/217 unitários; sob ASan 19/19, sem relato do ASan e com 31 pontos do UBSan, quatro nos callbacks do áudio. |
-| 2026-09-15 | 95% | Cópias da EFB em cor. `GXCopyTex` em RGB5A3, RGB565 ou RGBA8 rasteriza na CPU a captura do frame até a cópia: cada draw com sua projeção, viewport e scissor, culling, teste e escrita de profundidade (o Z8 do apagamento do HSD grava o fundo), TEV por fragmento sobre texels filtrados, teste de alpha e blend, a partir da cor e profundidade de limpeza e das limpezas que cópias anteriores do frame pediram. Os resultados copiam dois retratos por jogador a cada frame (975 cópias na rota de estoque, 1944 na cancelada): os painéis mostram o Fox, antes preto, e `FRAME:EFBCOPY` confere que a cópia tem imagem. Os caches de textura decodificam de novo um endereço que uma cópia reescreveu, e o presenter aplica as limpezas no meio do frame, o que tira um retângulo vermelho de trás do Fox dos resultados. Um teste velho copiava 320×240 RGBA8 num vetor de 64 bytes e passou a estourar a pilha; ganhou o buffer do tamanho da textura. Sem otimização os retratos custavam 57 s à rota cancelada; começar na última limpeza que cobre a cópia, testar a profundidade antes do TEV quando o alpha sempre passa e compilar `command_recorder.cpp` e `tev.cpp` com `-O2` a trazem a 29,8 s. O clang do `host-sanitize` recusou cinco conversões de sinal do rasterizador que o GCC aceitava, corrigidas. `host-debug` 19/19, 218/218 unitários; sob ASan 19/19, sem relato do ASan e com os mesmos 31 pontos do UBSan. |
-| 2026-09-15 | 96% | Dados de estágio. `map_plit` (a tabela de `LightList` que `ftCo_8009F4A4` dá aos lutadores por `Ground_801C49B4`), `quake_model_set` (um `DynamicModelDesc` com joint e três tabelas de animação) e `itemdata` (itens do estágio, `{tipo, Article*}`, vazia em Hyrule Temple) traduzem pelos leitores do host, com as luzes compartilhadas por endereço com as sobreposições do `map_head`, como `Ground_801C20E0` compara. Antes o jogo usava as duas luzes padrão de `Ground_803E06C8`. No frame 850 da rota de estoque o céu fica igual e a geometria iluminada e os lutadores mudam de tom; as sombras dos dois Fox passam a ter projeções próprias. Trace igual; `--sweep-archives` com 220 símbolos a mais traduzidos. `ALDYakuAll` e `yakumono_param` ficam de fora. `host-debug` 19/19, 219/219 unitários; sob ASan 19/19, sem relato do ASan e com os mesmos 31 pontos do UBSan. |
-| 2026-09-15 | 97% | Reverb e delay. O mixer AX guarda os callbacks de aux A e B, acumula o envio de cada voz (esquerda, direita e surround, com rampa), entrega o quadro ao callback e mistura o retorno na saída do quadro seguinte, como o DSP faz com o buffer que a CPU processou. O reverb padrão do jogo (aux A) chama `HandleReverb`, que no console é assembly PowerPC e no host parava com nome; agora é C, operação por operação: pré-linha, dois pentes, passa-tudo, passa-baixa, segundo passa-tudo e a mistura seca, com `fmaf` nas somas fundidas e o truncamento saturado do `fctiwz`, os três canais contíguos. O delay (aux B) já era C. `MELEE_HOST_AUDIO_AUX=0` desliga os barramentos; o verificador de áudio compara com eles desligados e confere com eles ligados que só o efeito ganha retorno (até 2564, zero antes). Testes do impulso do reverb e do retorno um quadro depois; um primeiro teste supunha a ARAM zerada e acertou bytes que outro teste gravou. Trace igual com aux. `host-debug` 19/19, 221/221 unitários; sob ASan 19/19, sem relato do ASan e com um ponto novo do UBSan, a chamada de `AXFXReverbStdCallback` pelo ponteiro `void (*)(void*, void*)` que o jogo registra. |
-| 2026-09-15 | 97% | Pernas do Mario e do Link. Sumiam porque as matrizes das coxas e de tudo abaixo delas ficavam NaN: o IK das pernas (`lbBgFlash_80021410`, que `ft_80089B08` roda ao pousar e parado) media os ossos com `sqrtf_store`, e `src/placeholder.h` definia `__frsqrte(x)` como `sqrt(x)`, quando o `frsqrte` do PowerPC estima 1/sqrt(x). Os passos de Newton de cerca de 50 lugares do jogo divergiam longe de x = 1 (a raiz de 44 dava -1,9e41). Um watchpoint de hardware que só para em NaN achou a escrita. A macro passa a `1.0 / sqrt(x)`, o que acerta também `acosf` e `asinf` (`acosf(0,99)` dava 1,1308 no lugar de 0,1415) e a dinâmica do chapéu do Link. Os três commits de contorno do Codex saem: esconder variantes de DObj não mudava um pixel da rota, e a dinâmica do chapéu estava desligada. Na rota Mario contra Link havia NaN nas pernas a partir dos frames 610 e 618; agora não há nenhum em 65 amostras, e as pernas aparecem nos BMPs. A bola de fogo do Mario (item 48) para com nome, porque os itens especiais não têm tradutor. O trace da rota de estoque muda no frame 910 (x de P1 em 0,01), com o mesmo desfecho. O teste de ARAM volta a passar com os 24 MiB do host, e um teste cobre `lbVector_Angle`. `host-debug` 21/21, 222/222 unitários; sob ASan, sem relato do ASan e com os mesmos 32 pontos do UBSan. |
-| 2026-09-15 | 98% | Mario e Link jogáveis. Os sete itens dos dois (bola de fogo 48, capa 83, bomba 58, bumerangue 60, hookshot 62, flecha 64 e arco 76) ganharam tradutor por slot: blocos de escalares onde o disco só tem escalares, e campo a campo onde há modelos e animações, porque os ponteiros do host são mais largos. A ficha de atributos do Link é traduzida inteira, mantendo os offsets do PowerPC, já que `ftCo_0D8E.c` lê os mesmos bytes por outra struct. `it_802A4BFC_sqrtf_offset` escrevia no slot de pilha vizinho para casar com o MWCC e arrasava o quadro de quem chamava; a corrente do hookshot chegava lá (SIGBUS no `host-debug`, silencioso no `-O2`), e o truque ficou sob `MELEE_HOST`. As rotas escolhem os dois pela CSS sem gdb (cursor a 1,24 unidade por frame; Mario 15 frames para cima, Link 30 para a direita) e entram na suíte: uma luta de um estoque até os resultados, com o Link vencedor e os retratos copiados da EFB, e uma rota de especiais que confere os estados do Mario (343, 345, 350, 347 e 212) e cria os sete itens. Também saiu um defeito de render que valia para tudo: com iluminação desligada o GX entrega só a cor de material, e o host multiplicava pelo ambiente do último material, o que deixava o estágio escuro e vermelho enquanto o bumerangue voava. `host-debug` 23/23, 223/223 unitários; sob ASan os 23 testes passam sem relato do ASan, com 36 pontos do UBSan, quatro deles novos e das famílias já registradas (três `1 << 31` e uma chamada por ponteiro de outro tipo). |
-| 2026-09-16 | 99% | Morte súbita. Uma luta por tempo empatada vai para a cena `GS_SUDDEN_DEATH` pelo caminho do próprio jogo: `gmVsMelee_ExitVs` conta dois vencedores, `gm_SetupSuddenDeath` troca as regras por um estoque a 300% e `gm_80166CCC` devolve ao fim da luta por tempo só as colocações que a morte súbita decidiu. Como o menu não oferece menos de um minuto, o roteiro ganhou `FRAME:CLOCK[=SEGUNDOS]`, que lê e escreve o relógio da cena, e o `RESULT` passou a imprimir as colocações. O teste novo deixa 3 s no relógio, o jogo esgota o tempo em `0s+59` e entra na morte súbita, onde o pad 1 cai: 501 frames de luta, 469 de morte súbita e 407 de resultados, 31 s no `host-debug`. A rota longa, sem atalho, dá a mesma sequência com 7.438 frames de luta e o mesmo `outcome 1 winners 2` com `places P1=2 P2=1`, em 49 s no `-O2`. `host-debug` 24/24 e 223/223 unitários. |
-| 2026-09-16 | 99% | `ALDYakuAll` e `yakumono_param`. A tabela de scripts que o estágio dá ao item aleatório traduz em todos os 76 arquivos que a têm: o índice 0 é o zero que `Ground_801C0800` pula, cada entrada vira command stream e a tabela fecha com NULL; em `GrSh.dat` o único script mora nos words logo depois de `yakumono_param`. Deste, o host traduz o bloco de zeros que 29 arquivos guardam (Hyrule Temple entre eles) e recusa com nome os 47 com parâmetros próprios, porque o layout é a struct de cada `grXXX.c` e sem as larguras dos campos não se troca a ordem dos bytes. `--sweep-archives`: `game_data` de 886/884 para 1038/989. Na rota o `stage_info.ald_yaku_all` deixa de ser NULL e o jogo escreve o script no estado do item aleatório; o trace da rota de estoque fica igual nos 1739 frames entre o `-O2` de antes e o de depois. `host-debug` 24/24 e 224/224 unitários. |
-| 2026-09-16 | 99% | Desafiante e aviso de prêmio. As duas cenas que faltavam ao modo VS entram na tabela do host com os callbacks de `gmscdata.c`; quem escolhe entre elas é `gmVsMelee_ExitResults`, pelo save. Como o menor total que libera um personagem é 50 lutas e o aviso depende de um troféu novo, o roteiro ganhou `FRAME:MATCHES[=TOTAL]`, `FRAME:TROPHY=ID` (que passa pelo `fn_80172C78` do jogo) e `FRAME:STOP`, que encerra a rota num frame, já que uma cena que espera botão prenderia o roteiro. Dois testes: o desafiante com a silhueta da Jigglypuff e o "A new foe has appeared!", e o prêmio com o "You got the Maxim Tomato trophy!" seguido da volta à CSS. A luta contra o desafiante fica fora do MVP (estágio próprio e CPU), e o que antes era SIGSEGV em `grStadium_801D13E0` virou parada com nome: `grDatFiles_801C6038` confere no host se alguma busca de símbolo do estágio foi recusada. `host-debug` 26/26 e 224/224 unitários. |
-| 2026-09-16 | 99% | Fog. O estado de `GXSetFog` passa a fazer parte do estado de draw capturado, e os dois caminhos que desenham a captura o aplicam entre o TEV e o blend, como o hardware: o shader do presenter e o rasterizador da CPU das cópias da EFB. A profundidade é a do próprio fragmento — numa projeção em perspectiva o w de clip —, o peso vem da curva do tipo (linear, `2^-8t`, `2^-8t²` e as duas invertidas) sobre a profundidade normalizada entre `startz` e `endz`, e a mistura é inteira nos dois lados, o que os faz arredondar igual. `MELEE_HOST_FOG=0` desliga para comparar. O jogo usa quatro configurações lineares na rota; com fog o título muda 3,6% dos pixels, o menu 89,8%, a CSS 0,1% e a SSS 69,4%, e a luta em Hyrule Temple nenhum, porque a cena de luta não instala fog. A conformidade do TEV passou a exercitar o fog (metade dos casos, 0 divergências) e o trace da rota de estoque segue igual. `host-debug` 26/26 e 225/225 unitários. |
-| 2026-09-16 | 99% | Teclado da janela por evento de verdade. As rotas chegam ao jogo pelo mesmo `PADRead` que a janela preenche, então nunca passavam pelo teclado. `port/tools/play_keyboard_probe.py` abre o `--play` no X11, espera a luta começar lendo a saída do jogo (com `stdbuf -oL`, senão o stdout num pipe sai em bloco e a linha chega tarde demais), manda a tecla com `xdotool keydown --window` — só para aquela janela, sem passar pelo foco do desktop — e lê o lutador de volta. Com `d` o pad 1 anda 109 a 131 unidades e passa por `Dash` (20); com `j` fica no lugar e entra em `Attack11` (44); sem tecla fica em `Wait` (14) no mesmo x. Falta uma pessoa jogar. |
-| 2026-09-16 | 100% | A rota inteira jogada pelo teclado. `port/tools/play_keyboard_match.py` leva o pad 1 do título aos resultados e de volta à CSS só com tecla de verdade na janela do `--play` — título, menu, CSS, SSS, luta, pausa e saída por L+R+A+START —, com o pad 2 no roteiro. Cada tecla sai na linha `rules frame N` do frame anterior e solta na do último frame em que devia estar baixa, o que reproduz os roteiros frame a frame; com o `keyup` um frame tarde o cursor da CSS andava 1,24 unidade a mais e a rota escolhia o Ness. Três execuções seguidas dão as mesmas cenas (1, 123, 243, 384, 533, 808, 1214), e a captura da própria janela no frame 700 mostra a luta com o HUD. Com isso o MVP está fechado: o que resta são itens fora da definição (bump, texturas de profundidade, mipmaps, ITD e surround, outros estágios, a luta do desafiante e CPU) e o julgamento de uma pessoa jogando. |
-| 2026-09-21 | 100% | Bump, texturas de profundidade e TEV indireto no presenter. As coordenadas `GX_TG_BUMPn` passaram a ser avaliadas num passo próprio, depois da transformação de posição, onde luzes, vértices e a base tangente estão no mesmo espaço; os formatos `Z8`, `Z16` e `Z24X8` são decodificados com a geometria de tile do GX e o shader reconstrói uma profundidade de 24 bits para o `GX_ZT_REPLACE`; e o estado de `GXSetTevIndirect` viaja com cada draw, com o GLSL deslocando a coordenada direta pela amostra indireta (viés ST, matriz, expoente, escala e wrap), as matrizes como uniforms para não multiplicar programas. O mapa que só um estágio indireto amostra passou a entrar no conjunto de texturas do draw, senão a refração ligaria a textura branca de reserva. Uma varredura de 725 símbolos de joint de todos os `.dat` e `.usd` dá 3.379.817 triângulos, **100,0% com o TEV avaliado por inteiro** (eram 98,3%, com 58.759 triângulos em 55 símbolos amostrando bump), zero erro de display list e zero índice recusado. No áudio o ITD passou a usar a linha circular de 32 amostras de cada voz, aproximando cada atraso de ouvido do alvo uma amostra por vez, e o canal surround é preservado até a saída, onde a apresentação estéreo o codifica no par Lt/Rt de fase oposta. A emissão da matriz indireta em GLSL estava truncada num parêntese — `exp2(float(...)` sem fechar, e com a escala dividida dentro do `exp2` em vez de fora, ao contrário da referência em C —, o que faria todo draw de refração falhar ao compilar e sumir da imagem; nenhum teste lia o GLSL como linguagem, então entrou um que confere os delimitadores balanceados em 4×4×8×7 combinações de matriz, formato, viés e wrap. O percentual do MVP fica em 100%: os três itens estavam fora da definição, e o que resta neles é conferência visual contra uma referência. `host-debug` 26/26 e 235/235 unitários. |
+Entries from 13–15 September 2026 are condensed; the full wording of each is in this file's git
+history. Entries from 15 September onwards are kept in full.
+
+### 13 September 2026 — 25% to 45%
+
+Baseline created: infrastructure, title and a partial menu validated. The memory card UI was
+isolated on the host and the route validated as far as `GM_VS (0x02)`. CSS, SSS and the rules
+menu came into the host core, then were registered in the host table, stopping explicitly at
+the missing `MnSelectChrDataTable` translator rather than crashing silently.
+`MnSelectChrDataTable` and `MnSelectStageDataTable` then materialized camera, lights, fog and
+the CSS/SSS models in host layout. The CSS stopped at `sislib.c:95` ("Memory Empty") because
+the scene's 0x2400-byte SIS pool is sized for PowerPC; the pool was doubled and its blocks
+pointer-aligned under `MELEE_HOST`. CSS and SSS then ran with two-pad input and Fox/Fox on
+Hyrule Temple was validated (`melee-host-vs-selection-asset`). `host-sanitize` linked again,
+and the VS route under ASan found two host bugs: a read past the SSS stage table and shape
+animation reading big-endian vertices as native (`pobj.c`). Instrumentation exclusions were
+removed from `host-sanitize`, which surfaced a stack overflow in the menu, out-of-array reads
+and undefined shifts. The whole of `src/melee` (808 files) then compiled into the core, and the
+match scene (`GS_VS`) linked with no undefined symbol; the route entered the match and stopped
+at `lbRefData`, which was translated next. The blocker moved to the effects:
+`effCommonDataTable` and the particle banks.
+
+### 14 September 2026 — 46% to 87%
+
+The host's particle loader landed (`eff*DataTable`, `map_ptcl`/`map_texg` as already-located
+banks), followed by a chain of asset translators, each unblocking the next step of match entry:
+`plLoadCommonData`, then `stage_datas` linked strongly, then `grGroundParam` (all 71
+`Gr*.dat`), the seven trophy tables of `TyDatai.usd`, the command-script conversion (native word
+order, reversed bit-fields generated from `lb/types.h`, relative subroutine and goto targets),
+`itPublicData` (98 `Article`), `map_head` (69 of 71 stages), `ftLoadCommonData` (23 common
+fighter tables) and `ftDataFox`. With those, both Foxes were created. `_scene_data` and
+`_scene_models` joined the file API and the HUD's tables were translated, so `fn_8016E730`
+completed and the scene entered the frame loop.
+
+Then came the 32-bit layout bugs, found by running the route under ASan: the camera's
+`Camera_ApplyQuake` reading statics in sequence and writing NaN; particle generator addresses
+in `u32`; the `UnkX` view of `IfDamageState`; structs read over sequential statics
+(`lbrefract.c`, `ftmaterial.c`, `ft_800852B0`); and the opcode in `Command_04` taken from the
+wrong bits. With those fixed, `GS_VS` entered the host table and the VS route crossed the match
+through the game's code, exiting with L+R+A+START — the `melee-host-vs-match-asset` test.
+
+The image followed: `FRAME:BMP=` captures, the white-quad palette bug (the GX recorder now
+stores each draw's palette), `coll_data` translated so the fighters land instead of falling,
+the draw flag's reversed bit-field so the fighters are drawn at all, and normal matrices kept
+separately from position matrices so both Foxes appear at the right size. The black band was
+identified as the projected shadow and `GXCopyTex` was made to materialize its I4 copy. Stick
+response and the A button were validated (the latter after ASan found `mpFloorGetLeft`
+truncating `groundCollLine` to `int`), and the run animation's infinite loop — reversed
+bit-fields over `fp->x594_s32` — was fixed. The results screen then ran end to end through the
+game's code, and Fox's neutral special worked once the blaster's own attributes were
+translated.
+
+### 15 September 2026 — 89% to 91%
+
+A match played to the end: the rules menu ran (after `mn_80231634` was made to return an
+`intptr_t`), P1 fell, and the results of a completed match returned to the CSS. The results and
+HUD got the right image once `gm_80168B34` and `gm_80168BF8` stopped returning stack garbage.
+Routes became repeatable with a frozen clock and the canonical `TRACE=`, and `gprof` on an
+`-O2 -pg` build removed the 92% of route time `finish_draw_locked` was spending redoing every
+captured triangle at the end of each draw. `melee-pc --play` arrived: the modes from the title
+in a 60 Hz window, with keyboard and the first gamepad as pad 1, and the pad was completed with
+the numeric keypad D-pad and digital L and R. Audio began with the `.ssm` bank format confirmed
+byte by byte and `port/tools/ssm_to_wav.py` as a reference decoder, then the host's AX mixer
+(64 voices, SDK priority stealing, 5 ms frames), which decoded the real voices identically to
+the reference across 456 voices in nine banks.
+
+### 15 September 2026 — 94%: the game plays effects and music
+
+`synth.c` assembles the `.ssm` descriptors on the host in pointer width (file record and sounds
+in one block, with their own readdress and deflag), the `.sem` has its command streams
+converted at load time, the resampling ratio is no longer stored as one word over two `u16`,
+and the `.hps` stream converts header and blocks. The AX clock runs a 5 ms frame per 5 ms of
+field on every retrace, the voices come on in the routes and in `--play`, which plays to the
+sound device and now waits one NTSC field per frame, and `WAV=` records the mixer. Comparing
+the music against a separate decoder found the mixer returning to the start of the block on
+every sample after looping to the next block (33 and 96 repeated samples): the end now triggers
+only at the address past the end, like the DSP's accelerator. `OSGetSoundMode` answers stereo.
+Music per window and effect 118 at correlation 1.000000; trace identical with and without
+sound; `host-debug` 19/19, 217/217 unit tests; under ASan 19/19, with no ASan report and 31
+UBSan points, four of them in the audio callbacks.
+
+### 15 September 2026 — 95%: colour EFB copies
+
+`GXCopyTex` in RGB5A3, RGB565 or RGBA8 rasterizes the frame's capture on the CPU up to the
+copy: each draw with its projection, viewport and scissor, culling, depth test and write (HSD's
+Z8 clear writes the background), per-fragment TEV over filtered texels, alpha test and blend,
+starting from the clear colour and depth and from the clears earlier copies in the frame asked
+for. The results copy two portraits per player every frame (975 copies on the stock route, 1944
+on the cancelled one): the panels show Fox, previously black, and `FRAME:EFBCOPY` checks that
+the copy has an image. The texture caches re-decode an address a copy rewrote, and the
+presenter applies the mid-frame clears, which removes a red rectangle from behind the Fox on
+the results. An old test copied 320×240 RGBA8 into a 64-byte array and started overflowing the
+stack; it got a buffer the size of the texture. Unoptimized, the portraits cost the cancelled
+route 57 s; starting at the last clear that covers the copy, testing depth before the TEV when
+alpha always passes, and compiling `command_recorder.cpp` and `tev.cpp` with `-O2` bring it to
+29.8 s. `host-sanitize`'s clang refused five sign conversions in the rasterizer that GCC
+accepted, all fixed. `host-debug` 19/19, 218/218 unit tests; under ASan 19/19, with no ASan
+report and the same 31 UBSan points.
+
+### 15 September 2026 — 96%: stage data
+
+`map_plit` (the `LightList` table `ftCo_8009F4A4` gives the fighters through
+`Ground_801C49B4`), `quake_model_set` (a `DynamicModelDesc` with a joint and three animation
+tables) and `itemdata` (the stage's items, `{type, Article*}`, empty on Hyrule Temple) all
+translate through the host's readers, with the lights shared by address with `map_head`'s
+overrides, the way `Ground_801C20E0` compares them. Before that the game used the two default
+lights of `Ground_803E06C8`. At frame 850 of the stock route the sky stays identical and the lit
+geometry and the fighters change tone; both Foxes' shadows get projections of their own. Trace
+identical; `--sweep-archives` with 220 more symbols translated. `ALDYakuAll` and
+`yakumono_param` are left out. `host-debug` 19/19, 219/219 unit tests; under ASan 19/19, with
+no ASan report and the same 31 UBSan points.
+
+### 15 September 2026 — 97%: reverb and delay
+
+The AX mixer keeps the aux A and B callbacks, accumulates each voice's send (left, right and
+surround, with ramping), hands the frame to the callback and mixes the return into the next
+frame's output, the way the DSP does with the buffer the CPU processed. The game's default
+reverb (aux A) calls `HandleReverb`, which on the console is PowerPC assembly and on the host
+stopped by name; it is now C, operation by operation: pre-delay, two combs, all-pass, low-pass,
+second all-pass and the dry mix, with `fmaf` on the fused sums and `fctiwz`'s saturating
+truncation, the three channels contiguous. The delay (aux B) was already C.
+`MELEE_HOST_AUDIO_AUX=0` turns the buses off; the audio checker compares with them off and
+confirms with them on that only the effect gains a return (up to 2564, zero before). Tests
+cover the reverb's impulse and the return one frame later; a first test assumed ARAM was zeroed
+and hit bytes another test had written. Trace identical with aux. `host-debug` 19/19, 221/221
+unit tests; under ASan 19/19, with no ASan report and one new UBSan point, the call to
+`AXFXReverbStdCallback` through the `void (*)(void*, void*)` pointer the game registers.
+
+### 15 September 2026 — 97%: Mario's and Link's legs
+
+They were disappearing because the thigh matrices and everything below them went NaN: the legs'
+IK (`lbBgFlash_80021410`, which `ft_80089B08` runs on landing and while idle) measured the
+bones with `sqrtf_store`, and `src/placeholder.h` defined `__frsqrte(x)` as `sqrt(x)`, when
+PowerPC's `frsqrte` estimates 1/sqrt(x). The Newton steps in about 50 places in the game
+diverged away from x = 1 (the root of 44 gave -1.9e41). A hardware watchpoint that only stops on
+NaN found the write. The macro is now `1.0 / sqrt(x)`, which also fixes `acosf` and `asinf`
+(`acosf(0.99)` gave 1.1308 instead of 0.1415) and Link's hat dynamics. Codex's three workaround
+commits are reverted: hiding DObj variants did not change a pixel of the route, and the hat
+dynamics were switched off. On the Mario versus Link route there were NaNs in the legs from
+frames 610 and 618; now there are none in 65 samples, and the legs appear in the BMPs. Mario's
+fireball (item 48) stops by name, because the special items have no translator. The stock
+route's trace changes at frame 910 (P1's x by 0.01), with the same outcome. The ARAM test passes
+again with the host's 24 MiB, and a test covers `lbVector_Angle`. `host-debug` 21/21, 222/222
+unit tests; under ASan, no ASan report and the same 32 UBSan points.
+
+### 15 September 2026 — 98%: Mario and Link playable
+
+Their seven items (fireball 48, cape 83, bomb 58, boomerang 60, hookshot 62, arrow 64 and bow
+76) got a per-slot translator: blocks of scalars where the disc holds only scalars, and field by
+field where there are models and animations, because the host's pointers are wider. Link's
+attribute record is translated in full, keeping the PowerPC offsets, since `ftCo_0D8E.c` reads
+the same bytes through another struct. `it_802A4BFC_sqrtf_offset` was writing into the
+neighbouring stack slot to match MWCC and wrecked the caller's frame; the hookshot's chain
+reached it (SIGBUS in `host-debug`, silent at `-O2`), and the trick now sits under
+`MELEE_HOST`. The routes pick both characters through the CSS without gdb (cursor at 1.24 units
+per frame; Mario 15 frames up, Link 30 to the right) and enter the suite: a one-stock match
+through to the results, with Link the winner and the portraits copied from the EFB, and a
+specials route that checks Mario's states (343, 345, 350, 347 and 212) and creates all seven
+items. A rendering defect that applied to everything also came out: with lighting off GX
+delivers only the material colour, and the host was multiplying by the last material's ambient,
+which left the stage dark and red while the boomerang flew. `host-debug` 23/23, 223/223 unit
+tests; under ASan all 23 pass with no ASan report, with 36 UBSan points, four of them new and
+from families already recorded (three `1 << 31` and one call through a pointer of another
+type).
+
+### 16 September 2026 — 99%: sudden death
+
+A timed match that ends in a draw goes to the `GS_SUDDEN_DEATH` scene through the game's own
+path: `gmVsMelee_ExitVs` counts two winners, `gm_SetupSuddenDeath` swaps the rules for one stock
+at 300% and `gm_80166CCC` returns to the end of the timed match only the placings sudden death
+decided. Since the menu offers nothing shorter than a minute, the script gained
+`FRAME:CLOCK[=SECONDS]`, which reads and writes the scene's clock, and `RESULT` now prints the
+placings. The new test leaves 3 s on the clock, the game runs the time out at `0s+59` and enters
+sudden death, where pad 1 falls: 501 match frames, 469 of sudden death and 407 of results, 31 s
+in `host-debug`. The long route, without the shortcut, gives the same sequence with 7,438 match
+frames and the same `outcome 1 winners 2` with `places P1=2 P2=1`, in 49 s at `-O2`.
+`host-debug` 24/24 and 223/223 unit tests.
+
+### 16 September 2026 — 99%: `ALDYakuAll` and `yakumono_param`
+
+The script table the stage gives the random item translates in all 76 files that have it: index
+0 is the zero `Ground_801C0800` skips, each entry becomes a command stream and the table closes
+with NULL; in `GrSh.dat` the only script lives in the words right after `yakumono_param`. Of
+that one, the host translates the zeroed block 29 files keep (Hyrule Temple among them) and
+refuses by name the 47 with parameters of their own, because the layout is the struct in each
+`grXXX.c` and without the field widths the byte order cannot be swapped. `--sweep-archives`:
+`game_data` from 886/884 to 1038/989. On the route, `stage_info.ald_yaku_all` stops being NULL
+and the game writes the script into the random item's state; the stock route's trace stays
+identical across the 1739 frames between the `-O2` build before and after. `host-debug` 24/24
+and 224/224 unit tests.
+
+### 16 September 2026 — 99%: challenger and prize notice
+
+The two scenes the VS mode was missing enter the host's table with `gmscdata.c`'s callbacks;
+what chooses between them is `gmVsMelee_ExitResults`, from the save. Since the smallest total
+that unlocks a character is 50 matches and the notice depends on a new trophy, the script
+gained `FRAME:MATCHES[=TOTAL]`, `FRAME:TROPHY=ID` (which goes through the game's `fn_80172C78`)
+and `FRAME:STOP`, which ends the route at a frame, since a scene waiting for a button would trap
+the script. Two tests: the challenger with Jigglypuff's silhouette and "A new foe has
+appeared!", and the prize with "You got the Maxim Tomato trophy!" followed by the return to the
+CSS. The match against the challenger stays outside the MVP (its own stage and a CPU), and what
+used to be a SIGSEGV in `grStadium_801D13E0` became a named stop: `grDatFiles_801C6038` checks
+on the host whether any stage symbol lookup was refused. `host-debug` 26/26 and 224/224 unit
+tests.
+
+### 16 September 2026 — 99%: fog
+
+The `GXSetFog` state becomes part of the captured draw state, and both paths that draw the
+capture apply it between the TEV and the blend, the way the hardware does: the presenter's
+shader and the CPU rasterizer of the EFB copies. The depth is the fragment's own — in a
+perspective projection, the clip w — the weight comes from the type's curve (linear, `2^-8t`,
+`2^-8t²` and the two inverted) over the depth normalized between `startz` and `endz`, and the
+blend is integer on both sides, which makes them round identically. `MELEE_HOST_FOG=0` turns it
+off for comparison. The game uses four linear configurations on the route; with fog the title
+changes 3.6% of the pixels, the menu 89.8%, the CSS 0.1% and the SSS 69.4%, and the Hyrule
+Temple match none, because the match scene installs no fog. TEV conformance now exercises fog
+(half the cases, 0 divergences) and the stock route's trace stays identical. `host-debug` 26/26
+and 225/225 unit tests.
+
+### 16 September 2026 — 99%: window keyboard through real events
+
+The routes reach the game through the same `PADRead` the window fills, so they never went
+through the keyboard. `port/tools/play_keyboard_probe.py` opens `--play` on X11, waits for the
+match to start by reading the game's output (with `stdbuf -oL`, or stdout in a pipe comes out in
+blocks and the line arrives too late), sends the key with `xdotool keydown --window` — only to
+that window, without going through desktop focus — and reads the fighter back. With `d`, pad 1
+walks 109 to 131 units and passes through `Dash` (20); with `j` it stays put and enters
+`Attack11` (44); with no key it stays in `Wait` (14) at the same x. A person playing is still
+missing.
+
+### 16 September 2026 — 100%: the whole route played from the keyboard
+
+`port/tools/play_keyboard_match.py` takes pad 1 from the title to the results and back to the
+CSS using only real key events in `--play`'s window — title, menu, CSS, SSS, match, pause and
+the L+R+A+START exit — with pad 2 in the script. Each key goes out on the previous frame's
+`rules frame N` line and is released on the line of the last frame it should be down, which
+reproduces the scripts frame by frame; with the `keyup` one frame late the CSS cursor moved 1.24
+units too far and the route picked Ness. Three consecutive runs give the same scenes (1, 123,
+243, 384, 533, 808, 1214), and the capture of the window itself at frame 700 shows the match
+with the HUD. With that the MVP is closed: what remains are items outside the definition (bump,
+depth textures, mipmaps, ITD and surround, other stages, the challenger match and CPU) and the
+judgement of a person playing.
+
+### 21 September 2026 — 100%: bump, depth textures and indirect TEV in the presenter
+
+The `GX_TG_BUMPn` coordinates are now evaluated in a pass of their own, after the position
+transform, where lights, vertices and the tangent basis are in the same space; the `Z8`, `Z16`
+and `Z24X8` formats are decoded with GX's tile geometry and the shader reconstructs a 24-bit
+depth for `GX_ZT_REPLACE`; and the `GXSetTevIndirect` state travels with each draw, with the
+GLSL offsetting the direct coordinate by the indirect sample (ST bias, matrix, exponent, scale
+and wrap), the matrices as uniforms so as not to multiply programs. The map that only an
+indirect stage samples now enters the draw's texture set, or refraction would bind the white
+fallback texture. A sweep of 725 joint symbols across every `.dat` and `.usd` gives 3,379,817
+triangles, **100.0% with the TEV fully evaluated** (it was 98.3%, with 58,759 triangles in 55
+symbols sampling bump), zero display list errors and zero rejected indices. In the audio, ITD
+now uses each voice's 32-sample circular line, moving each ear's delay towards its target one
+sample at a time, and the surround channel is preserved through to the output, where stereo
+presentation encodes it into the out-of-phase Lt/Rt pair. The emission of the indirect matrix in
+GLSL was truncated at a parenthesis — `exp2(float(...)` unclosed, and with the scale divided
+inside the `exp2` instead of outside, contrary to the C reference — which would have made every
+refraction draw fail to compile and vanish from the image; no test read the GLSL as a language,
+so one was added that checks balanced delimiters across 4×4×8×7 combinations of matrix, format,
+bias and wrap. The MVP percentage stays at 100%: those three items were outside the definition,
+and what remains in them is a visual check against a reference. `host-debug` 26/26 and 235/235
+unit tests.

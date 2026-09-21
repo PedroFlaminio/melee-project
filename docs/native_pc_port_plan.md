@@ -1,201 +1,187 @@
-# Plano de projeto: port nativo de Super Smash Bros. Melee para PC
+# Project plan: native Super Smash Bros. Melee PC port
 
-Status: proposta inicial  
-Base analisada: `doldecomp/melee`, commit `114e34ac5024211729b673baff28562143f910a0`  
-Versao alvo inicial: `GALE01` (NTSC-U 1.02)  
-Data da analise: 11 de setembro de 2026
+Status: initial proposal  
+Base analysed: `doldecomp/melee`, commit `114e34ac5024211729b673baff28562143f910a0`  
+Initial target version: `GALE01` (NTSC-U 1.02)  
+Date of analysis: 11 September 2026
 
-## 1. Resumo executivo
+## 1. Executive summary
 
-O projeto deve produzir um executavel nativo, e nao empacotar o Dolphin nem
-executar codigo PowerPC por emulacao. O codigo C de gameplay de Melee sera
-compilado para a plataforma hospedeira, enquanto uma nova camada de plataforma
-implementara os servicos que o jogo recebia do GameCube: GX, OS, VI, DVD, PAD,
-CARD, AX, ARAM, DSP e THP.
+The project must produce a native executable. It must not bundle Dolphin and must not run
+PowerPC code under emulation. Melee's C gameplay code is compiled for the host platform,
+while a new platform layer implements the services the game used to receive from the
+GameCube: GX, OS, VI, DVD, PAD, CARD, AX, ARAM, DSP and THP.
 
-O modelo de distribuicao sera semelhante ao Ship of Harkinian:
+The distribution model follows Ship of Harkinian:
 
-- o repositorio e os binarios distribuiveis nao conterao assets da Nintendo;
-- na primeira execucao, o usuario fornecera uma copia legal compativel do disco;
-- uma ferramenta verificara o dump e extraira/convertera os assets para um
-  arquivo de recursos local;
-- o executavel carregara codigo nativo e os recursos convertidos;
-- recursos substitutos e mods poderao ser montados como camadas adicionais.
+- neither the repository nor the distributable binaries contain Nintendo assets;
+- on first run the user supplies a legal, compatible copy of the disc;
+- a tool verifies the dump and extracts/converts the assets into a local resource archive;
+- the executable loads native code and the converted resources;
+- replacement resources and mods can be mounted as additional layers.
 
-O caminho recomendado nao e tentar portar todos os subsistemas ao mesmo tempo.
-Primeiro sera construida uma fatia vertical pequena: inicializacao, leitura de
-assets, video, input e uma partida Fox vs. Fox em Final Destination. A partir
-dela, os subsistemas serao expandidos ate cobrir todo o jogo.
+The recommended path is not to port every subsystem at once. First build a small vertical
+slice: startup, asset reading, video, input, and a Fox vs. Fox match on Final Destination.
+From there, expand the subsystems until the whole game is covered.
 
-Estimativa realista para uma versao 1.0:
+Realistic estimate for a 1.0 release:
 
-- equipe principal de 8 a 12 pessoas: 18 a 30 meses;
-- equipe principal de 3 a 5 pessoas: 30 a 48 meses;
-- prova de conceito jogavel, sem qualidade de release: 4 a 8 meses.
+- core team of 8 to 12 people: 18 to 30 months;
+- core team of 3 to 5 people: 30 to 48 months;
+- playable proof of concept, not release quality: 4 to 8 months.
 
-Essas faixas pressupõem contribuidores experientes em C/C++, graficos e
-engenharia reversa. O maior risco nao e mais decompilar gameplay; e reproduzir
-corretamente a plataforma GameCube e eliminar dependencias do ABI PowerPC de
-32 bits.
+These ranges assume contributors experienced in C/C++, graphics and reverse engineering.
+The biggest risk is no longer decompiling gameplay; it is reproducing the GameCube platform
+correctly and removing dependencies on the 32-bit PowerPC ABI.
 
-## 2. Estado da base e implicacoes
+## 2. State of the base and its implications
 
-### 2.1 O que ja esta pronto
+### 2.1 What is already done
 
-Na revisao analisada:
+In the revision analysed:
 
-- os 1.118 objetos declarados em `configure.py` usam `Object(Matching, ...)`;
-- ha aproximadamente 541 mil linhas de C em `src` e `extern/dolphin/src`;
-- o ponto de entrada e o loop de jogo estao em C;
-- gameplay, personagens, itens, estagios, menus e a `baselib` da HAL estao em C;
-- o build matching continua capaz de reconstruir `main.dol` para PowerPC.
+- all 1,118 objects declared in `configure.py` use `Object(Matching, ...)`;
+- there are roughly 541 thousand lines of C in `src` and `extern/dolphin/src`;
+- the entry point and the game loop are in C;
+- gameplay, characters, items, stages, menus and HAL's `baselib` are in C;
+- the matching build can still rebuild `main.dol` for PowerPC.
 
-Isso permite usar o DOL original como oraculo de comportamento e criar testes
-diferenciais muito precisos.
+That makes it possible to use the original DOL as a behavioural oracle and to build very
+precise differential tests.
 
-### 2.2 Por que a base ainda nao e portavel
+### 2.2 Why the base is not yet portable
 
-O build atual foi feito para reproduzir o binario original, nao para obedecer a
-um ABI moderno. Os bloqueadores observados incluem:
+The current build exists to reproduce the original binary, not to obey a modern ABI. The
+blockers observed include:
 
-- `s32` e `u32` sao definidos com `long`, cujo tamanho muda em hosts LP64;
-- estruturas assumem ponteiros de 4 bytes e possuem mais de 200 asserts de
-  tamanho ou offset;
-- o loader HSD reloca offsets gravando enderecos em slots de 32 bits;
-- arquivos do disco e memory card sao big-endian;
-- vertices imediatos sao escritos diretamente no FIFO GX em `0xCC008000`;
-- inicializacao e loop chamam diretamente OS, VI, DVD, PAD, CARD e GX;
-- ha 121 definicoes de funcoes `asm`, alem de quatro arquivos assembly;
-- existem centenas de trechos condicionais `MUST_MATCH` e pragmas especificos
-  do Metrowerks;
-- audio depende de AX/DSP/ARAM e video depende de VI/GX/THP;
-- callbacks assincronos de DVD, audio e retrace assumem a temporizacao e a
-  concorrencia do console;
-- diferencas de ponto flutuante podem alterar fisica, RNG derivado e
-  determinismo de partidas.
+- `s32` and `u32` are defined with `long`, whose size changes on LP64 hosts;
+- structures assume 4-byte pointers and carry more than 200 size or offset asserts;
+- the HSD loader relocates offsets by writing addresses into 32-bit slots;
+- disc and memory-card files are big-endian;
+- immediate vertices are written straight into the GX FIFO at `0xCC008000`;
+- startup and the game loop call OS, VI, DVD, PAD, CARD and GX directly;
+- there are 121 `asm` function definitions, plus four assembly files;
+- there are hundreds of `MUST_MATCH` conditional sections and Metrowerks-specific pragmas;
+- audio depends on AX/DSP/ARAM and video depends on VI/GX/THP;
+- asynchronous DVD, audio and retrace callbacks assume the console's timing and concurrency;
+- floating-point differences can alter physics, derived RNG and match determinism.
 
-Consequentemente, "100% decompilado" significa que o codigo C recompila para o
-mesmo PowerPC; nao significa "100% pronto para x86-64 ou ARM64".
+Consequently, "100% decompiled" means the C code recompiles to the same PowerPC; it does
+not mean "100% ready for x86-64 or ARM64".
 
-## 3. Definicao do produto
+## 3. Product definition
 
 ### 3.1 MVP
 
-O MVP deve ser deliberadamente estreito:
+The MVP must be deliberately narrow:
 
-- Windows 10/11 x86-64 e Linux x86-64;
-- somente disco `GALE01` NTSC-U 1.02;
-- extracao local de assets a partir do ISO/GCM fornecido pelo usuario;
-- controles por teclado e gamepads SDL;
-- video 16:9 ou 4:3, resolucao interna configuravel e tela cheia;
-- simulacao fixa na cadencia original;
-- apresentacao inicialmente sincronizada aos 60 Hz da simulacao, sem impedir
-  uma futura camada de poses intermediarias;
-- audio funcional com musica e efeitos;
-- Versus local de dois a quatro jogadores;
-- todos os 26 personagens e todos os estagios selecionaveis;
-- save local e configuracoes atomicas;
-- nenhum codigo ou asset proprietario distribuido nos releases.
+- Windows 10/11 x86-64 and Linux x86-64;
+- `GALE01` NTSC-U 1.02 discs only;
+- local asset extraction from the user-supplied ISO/GCM;
+- keyboard and SDL gamepad controls;
+- 16:9 or 4:3 video, configurable internal resolution and fullscreen;
+- simulation fixed at the original cadence;
+- presentation initially locked to the simulation's 60 Hz, without precluding a later layer
+  of intermediate poses;
+- working audio with music and effects;
+- local Versus for two to four players;
+- all 26 characters and every stage selectable;
+- local save and atomic settings;
+- no proprietary code or assets distributed in the releases.
 
-### 3.2 Versao 1.0
+### 3.2 Version 1.0
 
-A versao 1.0 acrescenta:
+Version 1.0 adds:
 
-- Windows, Linux e macOS, em x86-64 e ARM64 onde aplicavel;
-- todos os modos single-player e multiplayer local;
-- cutscenes THP, trofeus, eventos, debug de compatibilidade e memory card;
-- equivalencia visual, sonora e de gameplay validada por testes diferenciais;
-- apresentacao de alta taxa de atualizacao, ate 240 Hz quando o hardware
-  permitir, por interpolacao visual entre ticks de simulacao de 60 Hz;
-- hotplug, rumble, remapeamento completo e perfis de controle;
-- menu de configuracoes aberto por `Esc`, navegavel por teclado, mouse e
-  controle, com alteracoes persistentes por perfil;
-- pacote de recursos versionado, verificavel e recompativel;
-- API basica de mods e pacotes de assets substitutos;
-- instalador/updater sem conteudo do jogo.
+- Windows, Linux and macOS, on x86-64 and ARM64 where applicable;
+- every single-player and local multiplayer mode;
+- THP cutscenes, trophies, events, compatibility debug and memory card;
+- visual, audio and gameplay equivalence validated by differential tests;
+- high refresh-rate presentation, up to 240 Hz where the hardware allows, by visual
+  interpolation between 60 Hz simulation ticks;
+- hotplug, rumble, full remapping and controller profiles;
+- a settings menu opened with `Esc`, navigable by keyboard, mouse and controller, with
+  changes persisted per profile;
+- a versioned, verifiable, re-compatible resource package;
+- a basic API for mods and replacement asset packs;
+- an installer/updater with no game content.
 
-### 3.3 Fora do escopo inicial
+### 3.3 Out of initial scope
 
-- rollback netcode, matchmaking e compatibilidade com Slippi na build
-  principal;
-- mudancas de balanceamento ou mecanicas;
-- aumentar a cadencia da simulacao acima dos 60 Hz originais;
-- suporte a todas as revisoes e regioes do disco;
-- Android, iOS, consoles e WebAssembly;
-- editor visual de estagios/personagens;
-- carregar ISOs sem extracao/conversao previa;
-- substituir o formato de save original antes de existir compatibilidade.
+- rollback netcode, matchmaking and Slippi compatibility in the main build;
+- balance or mechanics changes;
+- raising the simulation cadence above the original 60 Hz;
+- support for every disc revision and region;
+- Android, iOS, consoles and WebAssembly;
+- a visual stage/character editor;
+- loading ISOs without prior extraction/conversion;
+- replacing the original save format before compatibility exists.
 
-Rollback deve orientar algumas decisoes desde o inicio — tempo deterministico,
-input gravavel e estado serializavel — mas nao deve bloquear o primeiro release.
+Rollback should guide a few decisions from the start — deterministic time, recordable input
+and serializable state — but must not block the first release.
 
-### 3.4 Alta taxa de atualizacao e build Slippi futura
+### 3.4 High refresh rate and a future Slippi build
 
-A simulacao do Melee permanece fixa em 60 Hz. Ela e a fonte de verdade para
-fisica, inputs, frame data, timers e determinismo. A apresentacao pode ser
-independente: o renderer guardara os estados anterior e atual e, entre dois
-ticks, amostrara poses intermediarias de camera, esqueletos, transformacoes e
-outros dados visuais seguros. A opcao de apresentacao oferecera somente os
-limites 60, 120, 144, 165 e 240 FPS; nao havera modo ilimitado. A meta de
-produto e atingir o limite selecionado sem executar logica extra nem alterar o
-resultado de uma partida.
+Melee's simulation stays fixed at 60 Hz. It is the source of truth for physics, inputs,
+frame data, timers and determinism. Presentation can be independent: the renderer keeps the
+previous and current states and, between two ticks, samples intermediate poses for the
+camera, skeletons, transforms and other safe visual data. The presentation option offers
+only the 60, 120, 144, 165 and 240 FPS targets; there will be no unlimited mode. The product
+goal is to reach the selected target without running extra logic and without changing the
+outcome of a match.
 
-Essa camada sera desenvolvida e validada depois da paridade visual basica a 60
-Hz. Cortes de camera, teleporte, spawn, troca de cena, efeitos sem estado
-interpolavel e qualquer descontinuidade devem preservar o quadro valido, nunca
-inventar uma posicao que afete a simulacao.
+This layer is developed and validated after basic visual parity at 60 Hz. Camera cuts,
+teleports, spawns, scene changes, effects with no interpolable state and any discontinuity
+must preserve the valid frame, never invent a position that feeds back into the simulation.
 
-O menu de configuracoes sera uma sobreposicao nativa, aberto e fechado por
-`Esc`, inspirado na organizacao de configuracoes do Ship of Harkinian, sem
-reutilizar sua interface ou codigo. Ele nao substitui os menus originais do
-Melee e devera pausar ou apenas capturar a entrada conforme o contexto seguro
-da cena. A primeira pagina sera **Video** e exibira:
+The settings menu is a native overlay, opened and closed with `Esc`, inspired by Ship of
+Harkinian's settings organization without reusing its interface or code. It does not replace
+Melee's original menus and must pause or merely capture input according to what is safe for
+the current scene. The first page is **Video** and shows:
 
-- **Frequencia de apresentacao:** 60, 120, 144, 165 ou 240 FPS;
-- **Aspecto:** 4:3 original ou 16:9, com letterboxing/pillarboxing correto e
-  sem alterar a logica da luta;
-- **Upscaling:** resolucao interna e filtro de escala configuraveis, sempre
-  separados da resolucao da janela; o backend deve expor somente metodos que
-  tenham sido validados em todas as plataformas suportadas.
+- **Presentation rate:** 60, 120, 144, 165 or 240 FPS;
+- **Aspect:** original 4:3 or 16:9, with correct letterboxing/pillarboxing and no change to
+  match logic;
+- **Upscaling:** configurable internal resolution and scaling filter, always separate from
+  the window resolution; the backend must expose only methods validated on every supported
+  platform.
 
-As escolhas devem ser persistidas em configuracao versionada, aplicadas ao
-renderer sem reiniciar a simulacao quando isso for seguro e revertidas
-automaticamente se uma troca de modo de video falhar. A interface mostrara a
-taxa efetiva de apresentacao e o modo de escala ativo, para distinguir uma
-preferencia selecionada de uma taxa que a GPU nao conseguiu sustentar.
+Choices must be persisted in versioned configuration, applied to the renderer without
+restarting the simulation where that is safe, and reverted automatically if a video mode
+change fails. The interface shows the effective presentation rate and the active scaling
+mode, so that a selected preference can be told apart from a rate the GPU could not sustain.
 
-Compatibilidade com Slippi nao e requisito da primeira versao. Se for adotada
-posteriormente, ela sera entregue em uma build especifica, opcional e separada
-da build principal. Essa build devera manter a simulacao estritamente
-deterministica, implementar a interface/protocolo esperado pelo Slippi e ser
-validada contra o Slippi Dolphin; recursos visuais de alta taxa permanecem
-somente no renderer e nao entram no estado sincronizado.
+Slippi compatibility is not a requirement for the first version. If it is adopted later, it
+ships as a specific, optional build separate from the main one. That build must keep the
+simulation strictly deterministic, implement the interface/protocol Slippi expects, and be
+validated against Slippi Dolphin; high-rate visual features stay in the renderer only and do
+not enter the synchronized state.
 
-## 4. Arquitetura proposta
+## 4. Proposed architecture
 
 ```text
                   +-----------------------------+
-ISO/GCM do usuario| verificador + extrator      |
------------------>| FST, HSD, texturas, audio   |
+   user's ISO/GCM | verifier + extractor        |
+----------------->| FST, HSD, textures, audio   |
                   +-------------+---------------+
                                 |
                                 v
                   +-----------------------------+
                   | melee.pak + manifest.json   |
-                  | recursos big-endian tratados|
+                  | big-endian data handled     |
                   +-------------+---------------+
                                 |
                                 v
 +-------------------+   +-------+---------+   +--------------------+
-| Codigo C de Melee |-->| libmelee_host   |-->| SDL3 / sistema     |
-| gameplay + baselib|   | C ABI compativel|   | janela/input/files |
+| Melee C code      |-->| libmelee_host   |-->| SDL3 / system      |
+| gameplay + baselib|   | C ABI compatible|   | window/input/files |
 +-------------------+   +---+---+---+-----+   +--------------------+
                           |   |   |
                     +-----+   |   +----------------+
                     v         v                    v
               +----------+ +----------+      +-----------+
               | GX host  | | AX host  |      | DVD/CARD  |
-              | renderer | | audio    |      | recursos  |
+              | renderer | | audio    |      | resources |
               +----+-----+ +----+-----+      +-----------+
                    |            |
                    v            v
@@ -204,520 +190,515 @@ ISO/GCM do usuario| verificador + extrator      |
              Metal
 ```
 
-### 4.1 Principios
+### 4.1 Principles
 
-1. Preservar o build matching original como referencia permanente.
-2. Manter alteracoes de port sob `MELEE_HOST` e interfaces pequenas, evitando
-   poluir gameplay com `#ifdef` por plataforma.
-3. Usar C ABI no limite entre o jogo e a camada host; C++ pode ser usado por
-   baixo para recursos, renderer, UI e ferramentas.
-4. Decodificar dados serializados em estruturas runtime nativas. Nao tratar um
-   blob big-endian com ponteiros de 32 bits como uma struct C de 64 bits.
-5. Manter simulacao e apresentacao separadas. Resolucao, widescreen e FPS de
-   apresentacao nao podem mudar a logica da luta.
-6. Priorizar testes diferenciais contra o DOL sobre "parece correto".
-7. Nao acoplar o projeto a um backend grafico ou sistema operacional.
+1. Preserve the original matching build as a permanent reference.
+2. Keep port changes under `MELEE_HOST` and behind small interfaces, avoiding per-platform
+   `#ifdef` noise in gameplay.
+3. Use a C ABI at the boundary between the game and the host layer; C++ may be used beneath
+   it for resources, renderer, UI and tools.
+4. Decode serialized data into native runtime structures. Do not treat a big-endian blob
+   with 32-bit pointers as a 64-bit C struct.
+5. Keep simulation and presentation separate. Resolution, widescreen and presentation FPS
+   must not change match logic.
+6. Prefer differential tests against the DOL over "looks right".
+7. Do not couple the project to one graphics backend or operating system.
 
-### 4.2 Organizacao sugerida do repositorio
+### 4.2 Suggested repository organization
 
 ```text
-src/                         # decomp original, mantida sincronizavel
-extern/dolphin/              # headers/API original
+src/                         # original decomp, kept synchronizable
+extern/dolphin/              # original headers/API
 port/
-  include/melee_host/        # interfaces C estaveis
-  src/os/                    # tempo, threads, alarmes, filas, memoria
-  src/io/                    # DVD virtual, arquivos, CARD
-  src/input/                 # PAD, teclado, gamepads, rumble
-  src/gx/                    # estado GX, TEV, shaders e draw submission
+  include/melee_host/        # stable C interfaces
+  src/os/                    # time, threads, alarms, queues, memory
+  src/io/                    # virtual DVD, files, CARD
+  src/input/                 # PAD, keyboard, gamepads, rumble
+  src/gx/                    # GX state, TEV, shaders and draw submission
   src/audio/                 # AX, DSP ADPCM, mixer, streaming
-  src/video/                 # janela, VI, frame pacing, THP
+  src/video/                 # window, VI, frame pacing, THP
   src/assets/                # runtime resource manager
-  src/ui/                    # configuracao e diagnostico
+  src/ui/                    # settings and diagnostics
 tools/
   extractor/                 # ISO/GCM -> melee.pak
-  trace/                     # captura e comparacao com Dolphin
+  trace/                     # capture and comparison against Dolphin
 tests/
   unit/
   differential/
   replay/
 cmake/
-CMakeLists.txt               # build host; build matching permanece separado
+CMakeLists.txt               # host build; the matching build stays separate
 ```
 
-## 5. Decisoes tecnicas
+## 5. Technical decisions
 
-### 5.1 Build e linguagem
+### 5.1 Build and language
 
-- CMake + Ninja para o build nativo.
-- C17 para o codigo C e C++20 para a camada host.
-- Clang e MSVC como compiladores suportados; GCC em CI como verificador extra.
-- SDL3 para janela, eventos, gamepads, rumble e abstracoes basicas de audio.
-- `wgpu-native` como primeira opcao de renderer, expondo D3D12, Vulkan e Metal.
-- ImGui somente para configuracao e ferramentas; nunca para UI original do jogo.
-- Sanitizers, warnings altos e analisadores estaticos ligados no codigo do port.
+- CMake + Ninja for the native build.
+- C17 for the C code and C++20 for the host layer.
+- Clang and MSVC as supported compilers; GCC in CI as an extra check.
+- SDL3 for window, events, gamepads, rumble and basic audio abstractions.
+- `wgpu-native` as the first choice of renderer, exposing D3D12, Vulkan and Metal.
+- ImGui only for settings and tools; never for the game's original UI.
+- Sanitizers, high warning levels and static analyzers enabled on port code.
 
-O renderer deve ficar atras de uma interface propria. Se a prova de conceito
-mostrar que a geracao dinamica de shaders TEV e inadequada em WebGPU, sera
-possivel trocar internamente por Vulkan/D3D/Metal ou bgfx sem alterar o jogo.
+The renderer must sit behind its own interface. If the proof of concept shows that dynamic
+TEV shader generation is a poor fit for WebGPU, it must be possible to swap internally for
+Vulkan/D3D/Metal or bgfx without touching the game.
 
-### 5.2 Estrategia de 32 para 64 bits
+### 5.2 32-to-64-bit strategy
 
-Nao e recomendado publicar um executavel de 32 bits como arquitetura final. A
-transicao deve ocorrer em duas pistas:
+Shipping a 32-bit executable as the final architecture is not recommended. The transition
+runs on two tracks:
 
-- uma build de bootstrap x86 de 32 bits, temporaria, pode acelerar o primeiro
-  boot e ajudar a localizar problemas que nao sao de ABI;
-- a build de produto deve ser 64-bit clean desde o primeiro trimestre.
+- a temporary 32-bit x86 bootstrap build may speed up the first boot and help locate
+  problems that are not ABI-related;
+- the product build must be 64-bit clean from the first quarter onwards.
 
-Passos obrigatorios:
+Mandatory steps:
 
-1. substituir aliases primitivos por `stdint.h` no modo host;
-2. classificar cada cast ponteiro-inteiro como endereco, offset, ID ou flags;
-3. criar tipos explicitos como `HsdOffset32`, `AssetId` e `RuntimeHandle`;
-4. separar estruturas `*Disk`/`*BE` das estruturas runtime;
-5. trocar relocacao in-place de HSD por desserializacao e pointer swizzling;
-6. manter tabelas para referencias ciclicas e externas;
-7. rodar ASan/UBSan e testes em x86-64 e ARM64 desde cedo.
+1. replace primitive aliases with `stdint.h` in host mode;
+2. classify every pointer-integer cast as address, offset, ID or flags;
+3. create explicit types such as `HsdOffset32`, `AssetId` and `RuntimeHandle`;
+4. separate `*Disk`/`*BE` structures from runtime structures;
+5. replace in-place HSD relocation with deserialization and pointer swizzling;
+6. keep tables for cyclic and external references;
+7. run ASan/UBSan and tests on x86-64 and ARM64 early.
 
-O loader HSD e o sistema de particulas formam o primeiro caso de teste, pois
-ambos gravam enderecos diretamente sobre offsets de 32 bits.
+The HSD loader and the particle system are the first test case, since both write addresses
+directly over 32-bit offsets.
 
-### 5.3 Recursos e distribuicao
+### 5.3 Resources and distribution
 
-A ferramenta `melee-extract` deve:
+The `melee-extract` tool must:
 
-1. aceitar ISO/GCM ou diretorio previamente extraido;
-2. identificar revisao/regiao por hash e metadados do disco;
-3. recusar silenciosamente nada: erros devem explicar o arquivo esperado;
-4. ler FST e extrair somente os arquivos necessarios;
-5. validar tamanho/hash dos arquivos essenciais;
-6. converter metadados big-endian para um formato versionado;
-7. preservar dados comprimidos quando nao houver beneficio em expandi-los;
-8. produzir `melee.pak` e um manifesto sem depender do caminho do ISO;
-9. permitir rebuild incremental e verificacao de integridade;
-10. jamais enviar o ISO ou arquivos extraidos a um servidor.
+1. accept an ISO/GCM or a previously extracted directory;
+2. identify revision/region by hash and disc metadata;
+3. refuse nothing silently: errors must explain which file was expected;
+4. read the FST and extract only the files that are needed;
+5. validate size/hash of the essential files;
+6. convert big-endian metadata into a versioned format;
+7. preserve compressed data where expanding it brings no benefit;
+8. produce `melee.pak` and a manifest that does not depend on the ISO's path;
+9. allow incremental rebuild and integrity checking;
+10. never upload the ISO or the extracted files to a server.
 
-O resource manager montara, em ordem: `melee.pak`, patches oficiais do port,
-mods do usuario e overrides soltos de desenvolvimento. Cada recurso tera tipo,
-versao de schema, hash, dependencias e nome logico.
+The resource manager mounts, in order: `melee.pak`, official port patches, user mods, and
+loose development overrides. Each resource carries a type, schema version, hash,
+dependencies and logical name.
 
-### 5.4 Camada OS e memoria
+### 5.4 OS layer and memory
 
-Implementar somente a superficie realmente usada pelo jogo:
+Implement only the surface the game actually uses:
 
-- arena e heaps sobre allocators host;
-- alarmes, ticks e calendario;
-- mutexes, filas de mensagens e threads;
-- interrupcoes como secao critica/reentrancia, e nao como emulacao de CPU;
-- cache flush/invalidate como no-op validado ou barreira quando necessario;
-- logs, asserts, panic e crash report;
-- callbacks assincronos entregues em pontos deterministas do game thread.
+- arena and heaps on top of host allocators;
+- alarms, ticks and calendar;
+- mutexes, message queues and threads;
+- interrupts as critical section/reentrancy, not as CPU emulation;
+- cache flush/invalidate as a validated no-op or a barrier where needed;
+- logs, asserts, panic and crash reports;
+- asynchronous callbacks delivered at deterministic points on the game thread.
 
-MetroTRK, suporte a hardware EXI de debug, registradores PPC e boot ROM nao
-entram no executavel host. Stubs devem declarar explicitamente se a operacao e
-no-op segura, nao suportada ou erro fatal.
+MetroTRK, EXI debug hardware support, PPC registers and boot ROM do not enter the host
+executable. Stubs must state explicitly whether the operation is a safe no-op, unsupported,
+or a fatal error.
 
-### 5.5 GX e renderer
+### 5.5 GX and renderer
 
-O renderer e a maior frente isolada do projeto. A camada `gx_host` deve modelar
-o estado observado pela API GX, nao emular o chip Flipper ciclo a ciclo.
+The renderer is the project's largest isolated front. The `gx_host` layer must model the
+state observed through the GX API, not emulate the Flipper chip cycle by cycle.
 
-Componentes:
+Components:
 
-- substituicao das escritas `GXWGFifo` por um command encoder no modo host;
-- vertex descriptors, formatos, arrays indexados e display lists;
-- matrizes de posicao, normal e textura;
-- texturas GameCube, TLUT, mipmaps, wrap e filtros;
-- blending, depth, alpha compare, culling, fog, scissor e viewport;
-- copy EFB/XFB, screenshots, shadows e efeitos que leem framebuffer;
-- compilador TEV: estado GX -> IR canonica -> shader;
-- cache persistente de pipelines/shaders por chave de estado;
-- ubershader de fallback para evitar travadas durante compilacao;
-- marcadores e captura de frame para RenderDoc;
-- caminho de referencia por software para pequenos testes de TEV.
+- replacing `GXWGFifo` writes with a command encoder in host mode;
+- vertex descriptors, formats, indexed arrays and display lists;
+- position, normal and texture matrices;
+- GameCube textures, TLUT, mipmaps, wrap and filters;
+- blending, depth, alpha compare, culling, fog, scissor and viewport;
+- EFB/XFB copies, screenshots, shadows and effects that read the framebuffer;
+- TEV compiler: GX state -> canonical IR -> shader;
+- persistent pipeline/shader cache keyed by state;
+- a fallback ubershader to avoid stalls during compilation;
+- markers and frame capture for RenderDoc;
+- a software reference path for small TEV tests.
 
-Ordem de implementacao:
+Implementation order:
 
-1. clear, viewport, triangulos sem textura;
-2. vertex arrays e matrizes;
-3. textura simples e blending;
-4. TEV de um estagio;
-5. multiplos estagios, indirect texturing e fog;
-6. EFB copies, shadows e casos especiais;
-7. cache, performance, widescreen e resolucao interna.
+1. clear, viewport, untextured triangles;
+2. vertex arrays and matrices;
+3. simple textures and blending;
+4. single-stage TEV;
+5. multiple stages, indirect texturing and fog;
+6. EFB copies, shadows and special cases;
+7. cache, performance, widescreen and internal resolution.
 
-Usar codigo do Dolphin diretamente so deve ocorrer apos decisao explicita de
-licenca. A arquitetura do emulador e mais ampla do que o necessario e sua
-licenca pode determinar a licenca de toda a camada derivada. Uma implementacao
-limpa das APIs usadas reduz acoplamento, mas exige testes fortes.
+Using Dolphin code directly must only happen after an explicit licensing decision. The
+emulator's architecture is broader than needed, and its license may determine the license of
+the whole derived layer. A clean implementation of the APIs in use reduces coupling but
+demands strong tests.
 
-### 5.6 Audio, ARAM e DSP
+### 5.6 Audio, ARAM and DSP
 
-A camada de audio deve preservar o modelo de vozes AX sem emular o DSP:
+The audio layer must preserve the AX voice model without emulating the DSP:
 
-- parser e decoder de DSP ADPCM;
-- vozes, prioridade, pitch, volume, pan, envelopes e looping;
-- aux sends e efeitos usados pela HSD Synth;
-- streaming de musica com buffer assincrono;
-- ARAM virtual como armazenamento/handles, nao endereco fisico;
-- mixer em ponto flutuante com conversao final para o dispositivo SDL;
-- resampling independente da taxa do dispositivo;
-- log de eventos de audio para comparacao deterministica.
+- DSP ADPCM parser and decoder;
+- voices, priority, pitch, volume, pan, envelopes and looping;
+- aux sends and the effects the HSD Synth uses;
+- music streaming with an asynchronous buffer;
+- virtual ARAM as storage/handles, not a physical address;
+- floating-point mixer with a final conversion for the SDL device;
+- resampling independent of the device rate;
+- an audio event log for deterministic comparison.
 
-Primeiro objetivo: musica e SFX audiveis na fatia vertical. Fidelidade de mix,
-reverb e casos extremos vem depois; latencia baixa e ausencia de underruns sao
-criterios de release.
+First goal: audible music and SFX in the vertical slice. Mix fidelity, reverb and edge cases
+come later; low latency and the absence of underruns are release criteria.
 
-### 5.7 VI, tempo e frame pacing
+### 5.7 VI, time and frame pacing
 
-- simulacao em tick fixo, derivado da temporizacao NTSC original;
-- `VIGetRetraceCount` e callbacks modelados pelo scheduler host;
-- render desacoplado, sem executar dois ticks por engano em monitores de 120 Hz;
-- opcao de interpolation somente para transformacoes visuais validadas;
-- pausa quando a janela perde foco configuravel;
-- medicao de input-to-photon no modo de diagnostico;
-- nenhum `sleep` deve ser fonte da verdade da simulacao.
+- simulation on a fixed tick, derived from the original NTSC timing;
+- `VIGetRetraceCount` and callbacks modelled by the host scheduler;
+- decoupled rendering, without accidentally running two ticks on a 120 Hz monitor;
+- an interpolation option only for validated visual transforms;
+- configurable pause when the window loses focus;
+- input-to-photon measurement in diagnostic mode;
+- no `sleep` may be the simulation's source of truth.
 
-### 5.8 Input e rumble
+### 5.8 Input and rumble
 
-- PAD 0-3 sobre SDL Gamepad;
-- deadzones, calibration, trigger analogico e gate octogonal configuraveis;
-- teclado como dispositivo equivalente;
-- hotplug sem alterar indices durante uma partida;
-- rumble com fallback quando o dispositivo nao o suporta;
-- captura/replay de input por tick como formato de teste estavel;
-- adaptadores GameCube tratados primeiro como HID/SDL, com backend especializado
-  opcional se a latencia justificar.
+- PAD 0-3 over SDL Gamepad;
+- configurable deadzones, calibration, analog triggers and octagonal gate;
+- keyboard as an equivalent device;
+- hotplug without changing indices during a match;
+- rumble with a fallback when the device does not support it;
+- per-tick input capture/replay as a stable test format;
+- GameCube adapters treated first as HID/SDL, with an optional specialized backend if
+  latency justifies it.
 
-### 5.9 DVD, CARD e saves
+### 5.9 DVD, CARD and saves
 
-- mapear paths e entry numbers do DVD para o resource manager;
-- manter semantica assincrona e ordem dos callbacks;
-- implementar um memory card virtual compatível com os dados de Melee;
-- gravacoes com arquivo temporario, `fsync` apropriado e rename atomico;
-- backups rotativos e recuperacao apos interrupcao;
-- importar/exportar GCI quando tecnicamente validado;
-- separar configuracao do port do save do jogo.
+- map DVD paths and entry numbers to the resource manager;
+- keep asynchronous semantics and callback ordering;
+- implement a virtual memory card compatible with Melee's data;
+- write through a temporary file, with appropriate `fsync` and an atomic rename;
+- rotating backups and recovery after an interruption;
+- import/export GCI once technically validated;
+- keep port configuration separate from the game save.
 
-### 5.10 THP e cutscenes
+### 5.10 THP and cutscenes
 
-Implementar o container THP e decodificar video/audio com bibliotecas auditadas,
-ou adaptar o decoder C existente apos remover otimizacoes PPC. Sincronizacao
-audio-video, seek usado pelo jogo e conversao de cores devem ter testes proprios.
+Implement the THP container and decode video/audio with audited libraries, or adapt the
+existing C decoder after removing PPC optimizations. Audio-video synchronization, the seek
+the game uses, and colour conversion each need their own tests.
 
-### 5.11 Determinismo e ponto flutuante
+### 5.11 Determinism and floating point
 
-O projeto nao deve prometer determinismo antes de medi-lo. A estrategia sera:
+The project must not promise determinism before measuring it. The strategy is:
 
-- builds de referencia com FMA/FP contraction controlados;
-- implementacoes conhecidas para estimativas PPC como `frsqrte`, quando afetam
-  gameplay;
-- auditoria de undefined behavior, casts, shifts e aliasing;
-- estado de RNG e input incluidos em toda trace;
-- hashes por tick apenas sobre estado logico canonico, sem ponteiros;
-- comparacoes com tolerancia somente onde a diferenca nao realimenta gameplay;
-- teste de partidas longas e rollback/snapshot mesmo antes do netplay.
+- reference builds with FMA/FP contraction under control;
+- known implementations for PPC estimates such as `frsqrte`, where they affect gameplay;
+- an audit of undefined behaviour, casts, shifts and aliasing;
+- RNG state and input included in every trace;
+- per-tick hashes over canonical logical state only, with no pointers;
+- tolerant comparisons only where the difference does not feed back into gameplay;
+- long-match testing and rollback/snapshot even before netplay.
 
-## 6. Estrategia de verificacao
+## 6. Verification strategy
 
-### 6.1 Oraculo de referencia
+### 6.1 Reference oracle
 
-Executar o DOL correspondente no Dolphin instrumentado e o port nativo com a
-mesma sequencia de inputs. O mapa de simbolos da decompilacao permite capturar
-estado sem inferir enderecos manualmente.
+Run the corresponding DOL in an instrumented Dolphin and the native port with the same input
+sequence. The decompilation's symbol map makes it possible to capture state without
+inferring addresses by hand.
 
-Por tick, registrar:
+Per tick, record:
 
-- cena e estado da maquina de jogo;
+- scene and game state machine;
 - seed/RNG;
-- action state, posicao, velocidade, dano e stocks de cada fighter;
-- entidades, itens e resultados de colisao relevantes;
-- eventos de audio;
-- assinatura canonica dos comandos GX;
-- hash de estado serializado.
+- each fighter's action state, position, velocity, damage and stocks;
+- relevant entities, items and collision results;
+- audio events;
+- canonical signature of the GX commands;
+- hash of the serialized state.
 
-Por marcos visuais, comparar:
+At visual milestones, compare:
 
-- screenshot com mascara para elementos temporais;
-- profundidade quando necessaria;
-- pipeline/TEV esperado;
-- tolerancia perceptual e mapa de diferenca.
+- screenshot with a mask for time-dependent elements;
+- depth where needed;
+- the expected pipeline/TEV;
+- perceptual tolerance and a difference map.
 
-### 6.2 Piramide de testes
+### 6.2 Test pyramid
 
-- unitarios: endian, FST, HSD relocation, ADPCM, TEV IR, CARD e matematicas;
-- contrato: cada funcao host imita casos observados da API Dolphin;
-- replay: sequencias curtas deterministicas por personagem/estagio;
-- diferencial: port versus DOL no Dolphin;
-- visual: golden images por backend/GPU com tolerancia definida;
-- soak: partidas automatizadas de 8 a 24 horas;
-- fuzz: parsers de disco, HSD, THP e save;
-- performance: tempo de tick, frame, shader compilation, audio e memoria.
+- unit: endianness, FST, HSD relocation, ADPCM, TEV IR, CARD and math;
+- contract: each host function mimics observed cases of the Dolphin API;
+- replay: short deterministic sequences per character/stage;
+- differential: port versus DOL in Dolphin;
+- visual: golden images per backend/GPU with a defined tolerance;
+- soak: automated 8 to 24 hour matches;
+- fuzz: disc, HSD, THP and save parsers;
+- performance: tick time, frame time, shader compilation, audio and memory.
 
 ### 6.3 CI
 
-Matriz minima:
+Minimum matrix:
 
-- Windows x86-64: MSVC e Clang;
-- Linux x86-64: Clang e GCC;
-- macOS ARM64: Clang a partir do milestone de 1.0;
-- ASan/UBSan no Linux;
-- build matching PowerPC para impedir regressao na base;
-- build sem assets sempre deve concluir;
-- testes que precisam de assets rodam apenas em workers privados, com hashes e
-  resultados publicos, nunca publicando os arquivos.
+- Windows x86-64: MSVC and Clang;
+- Linux x86-64: Clang and GCC;
+- macOS ARM64: Clang from the 1.0 milestone onwards;
+- ASan/UBSan on Linux;
+- PowerPC matching build to prevent regressions in the base;
+- the assetless build must always complete;
+- tests that need assets run only on private workers, with public hashes and results, never
+  publishing the files.
 
-## 7. Roadmap e gates
+## 7. Roadmap and gates
 
-### Fase 0 — charter, licenca e baseline (semanas 1-4)
+### Phase 0 — charter, license and baseline (weeks 1-4)
 
-Entregas:
+Deliverables:
 
-- charter de escopo e governanca;
-- decisao de licenca para codigo novo e politica de contribuicao;
-- estrategia de sincronizacao com `doldecomp/melee`;
-- inventario gerado de APIs de plataforma, asm, casts e layouts;
-- corpus inicial de replays/traces no DOL;
-- CI do build matching.
+- scope and governance charter;
+- licensing decision for new code and a contribution policy;
+- synchronization strategy with `doldecomp/melee`;
+- generated inventory of platform APIs, asm, casts and layouts;
+- initial corpus of replays/traces on the DOL;
+- CI for the matching build.
 
-Gate: qualquer commit do port preserva a reconstrucao matching e existe uma
-politica clara de assets/licencas.
+Gate: any port commit preserves the matching rebuild, and there is a clear assets/licensing
+policy.
 
-### Fase 1 — build host e ABI (meses 1-3)
+### Phase 1 — host build and ABI (months 1-3)
 
-Entregas:
+Deliverables:
 
-- CMake compila o codigo relevante em x86-64 com stubs;
-- tipos inteiros fixos e headers libc host;
-- exclusao explicita de Runtime/MetroTRK/hardware;
-- camada C ABI `melee_host`;
-- ASan/UBSan e relatorio dos casts perigosos;
-- executable skeleton chega ao `main` e encerra de forma controlada.
+- CMake compiles the relevant code on x86-64 with stubs;
+- fixed-width integer types and host libc headers;
+- explicit exclusion of Runtime/MetroTRK/hardware;
+- the `melee_host` C ABI layer;
+- ASan/UBSan and a report of dangerous casts;
+- an executable skeleton that reaches `main` and exits in a controlled way.
 
-Gate: build host sem assembly PPC e sem acesso a enderecos MMIO.
+Gate: host build with no PPC assembly and no MMIO address access.
 
-### Fase 2 — recursos, OS e boot headless (meses 2-5)
+### Phase 2 — resources, OS and headless boot (months 2-5)
 
-Entregas:
+Deliverables:
 
-- verificador/extrator de `GALE01`;
-- DVD virtual e loader HSD 64-bit/big-endian;
-- memoria, tempo, filas, alarmes e jobs assincronos;
-- renderer e audio nulos que capturam comandos;
-- boot headless ate a primeira cena/menu.
+- `GALE01` verifier/extractor;
+- virtual DVD and a 64-bit/big-endian HSD loader;
+- memory, time, queues, alarms and asynchronous jobs;
+- null renderer and audio that capture commands;
+- headless boot up to the first scene/menu.
 
-Gate: mesma sequencia de cenas e mesmo RNG inicial do DOL em um replay de boot.
+Gate: the same scene sequence and the same initial RNG as the DOL in a boot replay.
 
-### Fase 3 — renderer GX minimo (meses 3-8)
+### Phase 3 — minimal GX renderer (months 3-8)
 
-Entregas:
+Deliverables:
 
-- janela, VI e frame pacing;
-- GX command encoder, vertices, matrizes, texturas e TEV essencial;
-- title screen, menus e Final Destination renderizados;
-- captura visual automatizada.
+- window, VI and frame pacing;
+- GX command encoder, vertices, matrices, textures and essential TEV;
+- title screen, menus and Final Destination rendered;
+- automated visual capture.
 
-Gate: fatia vertical visual executa sem erros de validacao da API grafica.
+Gate: the visual vertical slice runs with no graphics API validation errors.
 
-### Fase 4 — fatia vertical jogavel (meses 5-10)
+### Phase 4 — playable vertical slice (months 5-10)
 
-Entregas:
+Deliverables:
 
 - PAD/rumble;
-- AX audio minimo;
-- partida Fox vs. Fox, quatro controles e HUD;
-- pause, fim de partida e retorno ao menu;
-- replay diferencial de cinco minutos.
+- minimal AX audio;
+- a Fox vs. Fox match, four controllers and the HUD;
+- pause, match end and return to the menu;
+- a five-minute differential replay.
 
-Gate: gameplay nao diverge do DOL durante o replay acordado e o frame budget e
-mantido em hardware de referencia.
+Gate: gameplay does not diverge from the DOL during the agreed replay, and the frame budget
+is held on reference hardware.
 
-### Fase 5 — cobertura de conteudo (meses 8-16)
+### Phase 5 — content coverage (months 8-16)
 
-Entregas:
+Deliverables:
 
-- todos os personagens, itens e estagios;
-- single-player, eventos, trofeus e menus restantes;
-- GX avancado, particulas, framebuffer effects e shadows;
-- THP, audio completo, CARD e saves;
-- suite de replays por matriz personagem/estagio.
+- every character, item and stage;
+- single-player, events, trophies and the remaining menus;
+- advanced GX, particles, framebuffer effects and shadows;
+- THP, full audio, CARD and saves;
+- a replay suite across the character/stage matrix.
 
-Gate: checklist de conteudo completo, zero crash conhecido de severidade alta e
-traces de gameplay dentro da politica de equivalencia.
+Gate: the content checklist is complete, there are no known high-severity crashes, and
+gameplay traces stay within the equivalence policy.
 
-### Fase 6 — portabilidade, fidelidade e performance (meses 13-22)
+### Phase 6 — portability, fidelity and performance (months 13-22)
 
-Entregas:
+Deliverables:
 
-- macOS/ARM64 e multiplos backends;
-- cache de shaders sem stutter recorrente;
-- profiling e reducao de latencia;
-- 4:3, widescreen seguro e resolucao interna;
-- acessibilidade basica, remapeamento e configuracao;
-- soak, fuzz e compatibilidade ampla de GPU/controle.
+- macOS/ARM64 and multiple backends;
+- shader cache without recurring stutter;
+- profiling and latency reduction;
+- 4:3, safe widescreen and internal resolution;
+- basic accessibility, remapping and settings;
+- soak, fuzz and broad GPU/controller compatibility.
 
-Gate: metas de desempenho e compatibilidade atendidas na matriz de hardware.
+Gate: performance and compatibility targets met across the hardware matrix.
 
-### Fase 7 — release 1.0 (meses 20-30)
+### Phase 7 — 1.0 release (months 20-30)
 
-Entregas:
+Deliverables:
 
-- instalador, updater e crash diagnostics opt-in;
-- fluxo de extracao compreensivel para usuario final;
-- documentacao de build, uso e troubleshooting;
-- auditoria de licencas e de ausencia de assets;
-- beta publica, triagem e release candidates reproduziveis.
+- installer, updater and opt-in crash diagnostics;
+- an extraction flow an end user can follow;
+- build, usage and troubleshooting documentation;
+- license audit and confirmation that no assets are present;
+- public beta, triage and reproducible release candidates.
 
-Gate: criterios da secao 8 atendidos por dois release candidates consecutivos.
+Gate: the criteria in section 8 met by two consecutive release candidates.
 
-Fases se sobrepoem por equipe. As datas sao faixas de planejamento, nao promessa
-de calendario.
+Phases overlap across the team. The dates are planning ranges, not a calendar promise.
 
-## 8. Criterios de aceite da versao 1.0
+## 8. Acceptance criteria for version 1.0
 
-Funcionalidade:
+Functionality:
 
-- o usuario consegue gerar os recursos a partir de um dump suportado;
-- todos os modos acessiveis no DOL alvo podem ser concluidos;
-- saves sobrevivem a encerramento inesperado durante operacoes nao criticas;
-- quatro controles, hotplug e rumble funcionam;
-- cutscenes, musica e SFX permanecem sincronizados.
+- the user can generate the resources from a supported dump;
+- every mode reachable in the target DOL can be completed;
+- saves survive an unexpected shutdown during non-critical operations;
+- four controllers, hotplug and rumble work;
+- cutscenes, music and SFX stay in sync.
 
-Fidelidade:
+Fidelity:
 
-- corpus competitivo de replays nao apresenta divergencia logica nao explicada;
-- diferencas de imagem ficam dentro dos limites aprovados por cena;
-- nenhuma melhoria altera fisica/timing quando o modo de compatibilidade esta
-  ativo;
-- RNG e ordem de callbacks sao reproduziveis com mesmo input/configuracao.
+- a competitive replay corpus shows no unexplained logical divergence;
+- image differences stay within the per-scene approved limits;
+- no enhancement changes physics/timing while compatibility mode is on;
+- RNG and callback ordering are reproducible given the same input/configuration.
 
 Performance:
 
-- tick de simulacao abaixo de 4 ms no hardware minimo definido;
-- frame dentro do budget a 1080p no hardware minimo;
-- sem underruns persistentes de audio;
-- sem crescimento de memoria em soak test de 8 horas;
-- stutter de shader fica restrito ao primeiro uso ou e absorvido pelo fallback.
+- simulation tick under 4 ms on the defined minimum hardware;
+- frame within budget at 1080p on the minimum hardware;
+- no persistent audio underruns;
+- no memory growth in an 8-hour soak test;
+- shader stutter is limited to first use or absorbed by the fallback.
 
-Qualidade e distribuicao:
+Quality and distribution:
 
-- zero defeito aberto critico e zero corrupcao de save conhecida;
-- builds reproduziveis e assinados para plataformas suportadas;
-- pacote publico nao contem assets do jogo;
-- SBOM e avisos de terceiros acompanham o release;
-- crash reporter e telemetria sao opt-in.
+- zero open critical defects and zero known save corruption;
+- reproducible, signed builds for the supported platforms;
+- the public package contains no game assets;
+- an SBOM and third-party notices ship with the release;
+- crash reporter and telemetry are opt-in.
 
-## 9. Organizacao da equipe
+## 9. Team organization
 
-Frentes que podem trabalhar em paralelo:
+Fronts that can run in parallel:
 
-- arquitetura/build/ABI: 2 pessoas;
-- GX/renderer: 3 a 4 pessoas;
-- OS, input, DVD e CARD: 2 pessoas;
-- assets e ferramentas: 1 a 2 pessoas;
-- audio/THP: 2 pessoas;
-- determinismo, testes e CI: 2 pessoas;
-- release, UX e documentacao: 1 pessoa, crescendo perto da beta.
+- architecture/build/ABI: 2 people;
+- GX/renderer: 3 to 4 people;
+- OS, input, DVD and CARD: 2 people;
+- assets and tools: 1 to 2 people;
+- audio/THP: 2 people;
+- determinism, testing and CI: 2 people;
+- release, UX and documentation: 1 person, growing near the beta.
 
-Algumas pessoas podem ocupar mais de uma frente, mas renderer, audio e testes
-diferenciais precisam de responsaveis claros. Cada subsistema tera owner,
-backup, interface documentada e dashboard de cobertura.
+Some people can cover more than one front, but renderer, audio and differential testing need
+clear owners. Each subsystem gets an owner, a backup, a documented interface and a coverage
+dashboard.
 
-Cadencia sugerida:
+Suggested cadence:
 
-- roadmap trimestral por gates, nao por numero de funcoes portadas;
-- demos jogaveis quinzenais;
-- RFC obrigatoria para formato de assets, GX IR, ABI e save;
-- bugs de divergencia recebem replay minimo antes do conserto;
-- toda melhoria opcional deve poder ser desligada pelo modo de compatibilidade.
+- a quarterly roadmap by gates, not by number of functions ported;
+- playable demos every two weeks;
+- a mandatory RFC for asset format, GX IR, ABI and save;
+- divergence bugs get a minimal replay before the fix;
+- every optional enhancement must be switchable off by compatibility mode.
 
-## 10. Riscos prioritarios
+## 10. Priority risks
 
-| Risco | Impacto | Mitigacao |
+| Risk | Impact | Mitigation |
 |---|---:|---|
-| Pointer swizzling HSD em 64 bits | Critico | Estruturas Disk/Runtime, IDs e testes de grafos ciclicos |
-| Semantica TEV/EFB incompleta | Critico | IR canonica, renderer de referencia e comparacao com Dolphin |
-| Divergencia de ponto flutuante | Critico | Traces por tick, funcoes PPC controladas e corpus competitivo |
-| AX/DSP com mix incorreto | Alto | Log de vozes, decoder testado e comparacao offline |
-| Callbacks assincronos mudam ordem | Alto | Scheduler deterministico e entrega no game thread |
-| Stutter por shaders | Alto | Cache persistente, prewarm e ubershader fallback |
-| Corrupcao de save | Alto | Escrita atomica, backup e fuzz de interrupcao |
-| Fork diverge da decomp | Alto | Build dual, upstream merges automatizados e poucos ifdefs |
-| Licenca de codigo reaproveitado | Alto | RFC/licence review antes de copiar Dolphin ou outro port |
-| Escopo cresce para netplay/mods | Alto | MVP congelado e epics posteriores separados |
-| Assets entram em CI/release | Critico | workers privados, scanner de artefatos e manifestos por hash |
+| 64-bit HSD pointer swizzling | Critical | Disk/Runtime structures, IDs and cyclic graph tests |
+| Incomplete TEV/EFB semantics | Critical | Canonical IR, reference renderer and comparison against Dolphin |
+| Floating-point divergence | Critical | Per-tick traces, controlled PPC functions and a competitive corpus |
+| AX/DSP mixing incorrectly | High | Voice log, tested decoder and offline comparison |
+| Asynchronous callbacks change order | High | Deterministic scheduler and delivery on the game thread |
+| Shader stutter | High | Persistent cache, prewarm and ubershader fallback |
+| Save corruption | High | Atomic writes, backups and interruption fuzzing |
+| Fork diverges from the decomp | High | Dual build, automated upstream merges and few ifdefs |
+| License of reused code | High | RFC/license review before copying Dolphin or another port |
+| Scope creeps into netplay/mods | High | Frozen MVP and separate later epics |
+| Assets enter CI/releases | Critical | Private workers, artifact scanner and hash manifests |
 
-## 11. Primeiros 90 dias
+## 11. First 90 days
 
-### Dias 1-30
+### Days 1-30
 
-- aprovar charter, licenca e estrutura do fork;
-- automatizar inventario de dependencias GameCube;
-- definir interfaces `host_os`, `host_gx`, `host_audio`, `host_io` e `host_pad`;
-- preparar cinco replays de referencia no Dolphin;
-- criar build CMake vazio e CI multiplataforma;
-- iniciar conversao de tipos fixos sem quebrar matching.
+- approve the charter, license and fork structure;
+- automate the inventory of GameCube dependencies;
+- define the `host_os`, `host_gx`, `host_audio`, `host_io` and `host_pad` interfaces;
+- prepare five reference replays in Dolphin;
+- create an empty CMake build and cross-platform CI;
+- start converting to fixed-width types without breaking matching.
 
-### Dias 31-60
+### Days 31-60
 
-- compilar `lb`, `gm` e partes de `sysdolphin` no host;
-- substituir MSL/Runtime e assembly PPC por implementacoes host ou exclusao;
-- implementar FST/ISO, manifesto e leitura DVD sincrona;
-- prototipar parser HSD big-endian com swizzling 64-bit;
-- criar OSReport/panic, clock e allocator;
-- fazer um programa de teste carregar e inspecionar um modelo do disco.
+- compile `lb`, `gm` and parts of `sysdolphin` on the host;
+- replace MSL/Runtime and PPC assembly with host implementations or exclusion;
+- implement FST/ISO, the manifest and synchronous DVD reads;
+- prototype a big-endian HSD parser with 64-bit swizzling;
+- create OSReport/panic, a clock and an allocator;
+- have a test program load and inspect a model from the disc.
 
-### Dias 61-90
+### Days 61-90
 
-- ligar o entry point a stubs auditaveis;
-- chegar ao boot headless com command logs;
-- abrir janela SDL e limpar framebuffer;
-- mapear PAD e gravar/reproduzir input por tick;
-- implementar primeiro triangulo via subset GX;
-- publicar relatorio de riscos atualizado e estimativa do vertical slice.
+- wire the entry point to auditable stubs;
+- reach headless boot with command logs;
+- open an SDL window and clear the framebuffer;
+- map PAD and record/replay input per tick;
+- implement the first triangle through a GX subset;
+- publish an updated risk report and an estimate for the vertical slice.
 
-Resultado esperado ao fim de 90 dias: nao um jogo completo, mas uma demonstracao
-que reduz os tres maiores riscos — build host, assets 64-bit e caminho GX — e
-fornece dados suficientes para confirmar ou revisar o cronograma.
+Expected outcome after 90 days: not a complete game, but a demonstration that reduces the
+three biggest risks — host build, 64-bit assets and the GX path — and provides enough data
+to confirm or revise the schedule.
 
-## 12. Indicadores de progresso
+## 12. Progress indicators
 
-Evitar usar "percentual de codigo compilado" como indicador principal. Medir:
+Avoid using "percentage of code compiled" as the main indicator. Measure:
 
-- numero de APIs host chamadas versus implementadas e validadas;
-- cenas que completam boot e transicao;
-- combinacoes personagem/estagio cobertas por replay;
-- ticks consecutivos sem divergencia logica;
-- estados GX/TEV cobertos e pipelines de fallback usados;
-- formatos de asset decodificados;
-- modos de jogo concluidos;
-- GPUs, sistemas e controles aprovados;
-- defeitos de fidelidade, crashes e corrupcao por severidade;
-- p95/p99 de tick, frame, audio callback e shader compilation.
+- number of host APIs called versus implemented and validated;
+- scenes that complete boot and transition;
+- character/stage combinations covered by replay;
+- consecutive ticks without logical divergence;
+- GX/TEV states covered and fallback pipelines used;
+- asset formats decoded;
+- game modes completed;
+- GPUs, systems and controllers approved;
+- fidelity defects, crashes and corruption by severity;
+- p95/p99 of tick, frame, audio callback and shader compilation.
 
-O dashboard deve distinguir `stub`, `funcional`, `equivalente` e `otimizado`.
-Uma API que apenas retorna zero nao conta como concluida.
+The dashboard must distinguish `stub`, `functional`, `equivalent` and `optimized`. An API
+that merely returns zero does not count as done.
 
-## 13. Decisao de inicio (go/no-go)
+## 13. Go/no-go decision
 
-O projeto recebe sinal verde para desenvolvimento completo quando a prova de
-conceito demonstrar simultaneamente:
+The project gets a green light for full development once the proof of concept demonstrates,
+at the same time:
 
-1. um asset HSD real carregado corretamente em x86-64;
-2. um frame real emitido pela baselib atraves do subset GX host;
-3. boot deterministico repetivel ate uma cena conhecida;
-4. ausencia de dependencia inevitavel de emulacao PowerPC;
-5. caminho de licenca e distribuicao aprovado.
+1. a real HSD asset loaded correctly on x86-64;
+2. a real frame emitted by baselib through the host GX subset;
+3. repeatable deterministic boot up to a known scene;
+4. no unavoidable dependency on PowerPC emulation;
+5. an approved licensing and distribution path.
 
-Se o subset GX revelar custo desproporcional, o projeto deve revisar renderer,
-bibliotecas e licenca — nao trocar silenciosamente o objetivo por empacotar um
-emulador. Se o swizzling 64-bit for inviavel no prazo, uma build x86 de 32 bits
-pode continuar servindo como ferramenta de pesquisa, mas nao substitui a meta
-de produto multiplataforma.
+If the GX subset turns out to cost disproportionately, the project must revisit renderer,
+libraries and license — not silently swap the goal for bundling an emulator. If 64-bit
+swizzling proves unfeasible in time, a 32-bit x86 build can keep serving as a research tool,
+but it does not replace the cross-platform product goal.
 
-## Referencias de arquitetura
+## Architecture references
 
-- Decompilacao Melee: <https://github.com/doldecomp/melee>
+- Melee decompilation: <https://github.com/doldecomp/melee>
 - Shipwright / Ship of Harkinian: <https://github.com/HarbourMasters/Shipwright>
-- Instrucoes de build do Shipwright:
+- Shipwright build instructions:
   <https://github.com/HarbourMasters/Shipwright/blob/develop/docs/BUILDING.md>

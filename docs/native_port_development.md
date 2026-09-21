@@ -1,16 +1,16 @@
-# Desenvolvimento do port nativo
+# Native port development
 
-O build host e independente do build matching PowerPC. Ele ainda e uma base de
-bootstrap: nao inicia o jogo completo.
+The host build is the only build in this repository. It is still a bootstrap base: it does
+not start the complete game.
 
-## Build rapido
+## Quick build
 
-Requisitos atuais:
+Current requirements:
 
-- CMake 3.25 ou superior;
+- CMake 3.25 or newer;
 - Ninja;
-- compilador C17/C++20;
-- Python 3.10 ou superior para ferramentas e testes.
+- a C17/C++20 compiler;
+- Python 3.10 or newer for tools and tests.
 
 ```sh
 cmake --preset host-debug
@@ -19,7 +19,7 @@ ctest --preset host-debug
 ./build/host-debug/port/melee-pc --diagnose
 ```
 
-No Linux, a build com ASan e UBSan e:
+On Linux, the ASan and UBSan build is:
 
 ```sh
 cmake --preset host-sanitize
@@ -27,94 +27,82 @@ cmake --build --preset host-sanitize
 ctest --preset host-sanitize
 ```
 
-## Inventario de portabilidade
+## Portability inventory
 
-O inventario e heuristico e serve para acompanhar reducao de bloqueadores:
+The inventory is heuristic and exists to track the reduction of blockers:
 
 ```sh
 python3 tools/port_inventory.py --output build/port-inventory.json
 ```
 
-O JSON separa codigo do jogo/baselib da SDK Dolphin e lista objetos matching,
-assembly, APIs de plataforma, asserts de layout, enderecos fixos e casts para
-32 bits. Uma ocorrencia inventariada nao significa necessariamente um bug; ela
-indica trabalho que precisa ser classificado.
+The JSON separates game/baselib code from the Dolphin SDK and lists matching objects,
+assembly, platform APIs, layout asserts, fixed addresses and casts to 32 bits. An inventoried
+occurrence is not necessarily a bug; it flags work that needs to be classified.
 
-## Inspecao e extracao de disco
+## Disc inspection and extraction
 
-Inspecionar um dump sem extrair:
-
-```sh
-python3 tools/melee_extract.py inspect /caminho/para/melee.iso
-```
-
-Extrair uma copia `GALE01` suportada:
+Inspect a dump without extracting:
 
 ```sh
-python3 tools/melee_extract.py extract /caminho/para/melee.iso assets-local
+python3 tools/melee_extract.py inspect /path/to/melee.iso
 ```
 
-A ferramenta valida o magic GameCube, game ID, limites do DOL/FST e o SHA-1 do
-`main.dol`. Arquivos existentes nao sao sobrescritos sem `--force`. O diretorio
-extraido contem `manifest.json`, `dvd-index.bin`, `sys/main.dol` e os arquivos do FST. Ele contem
-material do disco do usuario e nunca deve ser versionado ou publicado.
+Extract a supported `GALE01` copy:
 
-## Escalonador de cena
+```sh
+python3 tools/melee_extract.py extract /path/to/melee.iso assets-local
+```
 
-O runtime de objetos HSD original pode ser executado sem assets. O comando cria
-dois objetos de cena, pausa o p_link de um deles e roda o escalonador:
+The tool validates the GameCube magic, the game ID, the DOL/FST bounds and the SHA-1 of
+`main.dol`. Existing files are not overwritten without `--force`. The extracted directory
+holds `manifest.json`, `dvd-index.bin`, `sys/main.dol` and the FST's files. It contains
+material from the user's disc and must never be committed or published.
+
+## Scene scheduler
+
+The original HSD object runtime can run without assets. The command creates two scene
+objects, pauses the p_link of one of them and runs the scheduler:
 
 ```sh
 ./build/host-debug/port/melee-pc --diagnose-scene-runtime 60
 ```
 
-Ele reporta quantos frames rodaram, quantos objetos e processos estao vivos e
-quantas vezes cada processo foi chamado, alem de retraces VI e callbacks de
-draw-done. O processo do p_link pausado deve terminar com zero chamadas; os
-outros tres contadores devem ser iguais ao numero de frames pedido.
+It reports how many frames ran, how many objects and processes are alive and how many times
+each process was called, along with VI retraces and draw-done callbacks. The paused p_link's
+process must finish with zero calls; the other three counters must equal the number of frames
+requested.
 
-## Heap do OS
+## OS heap
 
-`OSAlloc.c` e `OSArena.c` sao codigo da SDK e carregam enderecos em largura de
-ponteiro apenas sob `MELEE_HOST`. Ao mexer neles, confirme que o caminho
-matching nao muda comparando o codigo gerado com `unsigned long` de 32 bits,
-que e a largura do PowerPC:
+`OSAlloc.c` and `OSArena.c` are SDK code and carry pointer-width addresses only under
+`MELEE_HOST`. Keep the non-host branch untouched when editing them: the console layout of
+those structures is what the rest of the SDK assumes.
 
-```sh
-cc -m32 -c -O2 -std=c17 -Iextern/dolphin/include -Isrc -w \
-   extern/dolphin/src/dolphin/os/OSAlloc.c -o /tmp/novo.o
-```
+## Video time
 
-Compare com o mesmo comando sobre a versao anterior do arquivo. Sem `-m32` a
-comparacao nao vale: fora do host, `u32` e `unsigned long`, que tem 64 bits em
-x86-64 e 32 no alvo.
+The host's VI layer does not sleep. A retrace happens when the game blocks in
+`VIWaitForRetrace` or when the host loop calls `melee_host_video_advance_retrace`. Pick one
+of the two as the source of time; using both in the same loop makes the retrace counter
+advance twice.
 
-## Tempo de video
+## HSD inspection
 
-A camada VI do host nao dorme. Um retrace acontece quando o jogo bloqueia em
-`VIWaitForRetrace` ou quando o laco do host chama
-`melee_host_video_advance_retrace`. Escolha um dos dois como fonte do tempo;
-usar os dois no mesmo laco faz o contador de retrace avancar em dobro.
-
-## Inspecao de HSD
-
-Um arquivo HSD individual pode ser validado sem fazer relocacao in-place:
+An individual HSD file can be validated without relocating in place:
 
 ```sh
 ./build/host-debug/port/melee-pc --inspect-hsd assets-local/path/file.dat
 ```
 
-O parser mantem offsets serializados de 32 bits separados de ponteiros runtime,
-que e a base para o loader 64-bit.
+The parser keeps serialized 32-bit offsets separate from runtime pointers, which is the basis
+for the 64-bit loader.
 
-## Arquivos pelo caminho do jogo
+## Files through the game's own path
 
-O jogo nao abre um arquivo por offset: chama `lbArchive_LoadSymbols` com uma
-lista de nomes, que faz `HSD_ArchiveParse`, resolve os externs e pede cada
-simbolo a `HSD_ArchiveGetPublicAddress`. O host implementa essas quatro
-funcoes em `port/src/assets/hsd_host_archive.cpp`. O comando abaixo repete
-esse caminho com a lista que `gmTitle_801A1AC0` usa e entrega cada descritor
-ao loader original do seu tipo:
+The game does not open a file by offset: it calls `lbArchive_LoadSymbols` with a list of
+names, which runs `HSD_ArchiveParse`, resolves the externs and asks
+`HSD_ArchiveGetPublicAddress` for each symbol. The host implements those four functions in
+`port/src/assets/hsd_host_archive.cpp`. The command below repeats that path with the list
+`gmTitle_801A1AC0` uses and hands each descriptor to the original loader for its type:
 
 ```sh
 ./build/host-debug/port/melee-pc --load-archive assets-local/GmTtAll.usd \
@@ -124,156 +112,135 @@ ao loader original do seu tipo:
     TtlBg_Top_shapeanim_joint TitleMark_sobjdesc
 ```
 
-Sem nomes, o comando pede todos os simbolos publicos do arquivo. A varredura
-faz isso para todo arquivo do disco que e um unico arquivo HSD:
+With no names, the command asks for every public symbol in the file. The sweep does that for
+every file on the disc that is a single HSD file:
 
 ```sh
 ./build/host-debug/port/melee-pc --sweep-archives assets-local
 ```
 
-Tres leituras do relatorio:
+Three readings of the report:
 
-- `translated` sem `loaded` e o esperado para animacoes e sprites: uma arvore
-  de animacao so carrega junto da arvore que dirige, e o sprite precisa da
-  biblioteca de sprites, que ainda nao compila.
-- `unsupported` nao e falha. E um simbolo cujo sufixo o host ainda nao
-  traduz, e o jogo receberia NULL com o relatorio `host HSD archive: cannot
-  translate`. So `failed` conta como erro.
-- O tipo vem do sufixo do nome. Ao adicionar um tipo, acrescente o sufixo em
-  `kSuffixes`, com os mais longos antes (`_matanim_joint` antes de `_joint`),
-  e o metodo correspondente no materializador. Quando o layout no disco for
-  duvidoso, levante-o antes em todos os arquivos que tem o sufixo: foi assim
-  que a tabela de fogs de `SceneDesc` se mostrou diferente do que o header
-  sugere.
+- `translated` without `loaded` is expected for animations and sprites: an animation tree
+  only loads alongside the tree it drives, and the sprite needs the sprite library, which
+  does not compile yet.
+- `unsupported` is not a failure. It is a symbol whose suffix the host does not translate
+  yet, and the game would receive NULL with the report `host HSD archive: cannot translate`.
+  Only `failed` counts as an error.
+- The type comes from the name's suffix. When adding a type, add the suffix to `kSuffixes`,
+  longest first (`_matanim_joint` before `_joint`), and the matching method in the
+  materializer. When the on-disc layout is doubtful, survey it first across every file that
+  has the suffix: that is how `SceneDesc`'s fog table turned out to differ from what the
+  header suggests.
 
-A camada guarda o que parseou pelo endereco do buffer, nao pelo `HSD_Archive`.
-Um teste que parseia um arquivo deve chamar `melee_host_hsd_archive_release`
-com o mesmo buffer ao terminar, senao os descritores sobrevivem ao teste.
+The layer keys what it parsed by the buffer's address, not by the `HSD_Archive`. A test that
+parses a file must call `melee_host_hsd_archive_release` with the same buffer when it
+finishes, or the descriptors outlive the test.
 
-## Boot de memoria e o carregador do jogo
+## Memory boot and the game's loader
 
-O comando abaixo sobe a memoria como o `gmMain` e carrega o arquivo da tela de
-titulo pelo `lbArchive_LoadSymbols` original:
+The command below brings memory up the way `gmMain` does and loads the title screen's file
+through the original `lbArchive_LoadSymbols`:
 
 ```sh
 ./build/host-debug/port/melee-pc --boot-title-archive assets-local
 ```
 
-O caminho e o do jogo: `lbFile` pede a leitura a fila devcom, que abre o
-arquivo no DVD do host, e espera em `lb_800195D0`. No host essa espera da um
-passo no escalonador, e so entao a leitura acontece.
+The path is the game's: `lbFile` posts the read to the devcom queue, which opens the file on
+the host DVD, and waits in `lb_800195D0`. On the host that wait steps the scheduler, and only
+then does the read happen.
 
-Tres cuidados:
+Two things to watch for:
 
-- Rode fora do binario de testes. A sequencia move a arena do OS e recria os
-  heaps do HSD, o que quebraria testes que supoem o bootstrap headless.
-- Se o comando parar com 100% de CPU, a espera de disco nao esta vendo a
-  leitura terminar. A causa que ja apareceu foi o DVD recusando o intervalo:
-  o devcom marca um erro estatico, nao chama o callback e `waitForDisc` gira.
-  Um `gdb` interrompido mostra `lb_800195D0` no topo; confira o intervalo
-  pedido contra o tamanho do arquivo.
-- Ao mexer em `lbmemory.c`, `lbheap.c`, `lbfile.c` ou `lbarchive.c`, compare os
-  objetos de 32 bits antes e depois com `-DMUST_MATCH`, compilando as duas
-  versoes a partir do mesmo caminho (o `__FILE__` entra nos dados):
+- Run it outside the test binary. The sequence moves the OS arena and recreates the HSD
+  heaps, which would break tests that assume the headless bootstrap.
+- If the command stalls at 100% CPU, the disc wait is not seeing the read finish. The cause
+  seen so far was the DVD refusing the range: devcom marks a static error, never calls the
+  callback, and `waitForDisc` spins. An interrupted `gdb` shows `lb_800195D0` on top; check
+  the requested range against the file's size.
 
-```sh
-cc -m32 -c -O2 -std=c17 -DMUST_MATCH -include stdint.h -include stddef.h \
-   -include stdbool.h -Iextern/dolphin/include -Isrc -Isrc/melee/lb -w \
-   /tmp/match/lbmemory.c -o /tmp/match/lbmemory.o
-```
-
-Sem `-DMUST_MATCH` o `HSD_ASSERT` usa `__LINE__`, e qualquer linha inserida
-muda o objeto sem mudar o DOL. Os `-include` suprem o `stdint.h` que o
-toolchain matching traz por outro caminho.
-
-## Cena de titulo
+## Title scene
 
 ```sh
 ./build/host-debug/port/melee-pc --boot-title-scene assets-local
 ```
 
-Sobe o boot do `gmMain`, le os dados que vivem no `main.dol` e roda
-`gm_801A4BD4` e `gm_Scene_Title_OnEnter`. O relatorio conta os GObjs pelas
-listas da propria biblioteca e sai com erro se a cena nao tiver o que
-`gmtitle.c` monta.
+Runs `gmMain`'s boot, reads the data that lives in `main.dol`, and runs `gm_801A4BD4` and
+`gm_Scene_Title_OnEnter`. The report counts GObjs through the library's own lists and exits
+with an error if the scene lacks what `gmtitle.c` assembles.
 
-Como a cadeia foi aberta, e como abrir a proxima:
+How the chain was opened, and how to open the next one:
 
-- Coloque o entrypoint que se quer alcancar sob uma chamada real no
-  executavel. Com `--gc-sections`, funcao sem chamador e descartada junto com
-  as referencias dela, e o link nao diz nada.
-- Leia as referencias indefinidas com `LANG=C`, agrupe por arquivo de origem e
-  decida caso a caso. Preferencia: compilar o modulo original; dado que vive no
-  DOL, ler do `main.dol`; tabela que cita conteudo inteiro do jogo (estagios,
-  lutadores), ligada forte, porque a decomp inteira esta no core e uma
-  referencia `weak` nao puxa membro de biblioteca estatica (a entrada fica
-  nula sem aviso); funcao
-  so alcancavel por um caminho que a cena nao toma, parada com nome em
+- Put the entry point you want to reach under a real call in the executable. With
+  `--gc-sections`, a function with no caller is discarded together with its references, and
+  the link says nothing.
+- Read the undefined references with `LANG=C`, group them by source file and decide case by
+  case. Preference order: compile the original module; for data that lives in the DOL, read
+  it from `main.dol`; a table that names whole swathes of game content (stages, fighters)
+  gets linked strongly, because the whole decomp is in the core and a `weak` reference does
+  not pull a member out of a static library (the entry silently stays null); a function
+  reachable only through a path the scene does not take gets a named stop in
   `port/src/game/unported.c`.
-- Um arquivo de dados que o codigo le direto como struct (`.ssm`, `.sem`) e
-  big-endian e costuma relocar ponteiros de 32 bits no lugar. Levante o layout
-  no disco antes de escrever o caminho do host, como na API de arquivo.
-- Um `assert` que falha logo depois de uma leitura de disco quase sempre e
-  ordem de bytes; um segfault em alocador de biblioteca quase sempre e
-  inicializacao do `gmMain` que o boot do host ainda nao faz.
-- Rode a mesma cadeia no `host-sanitize` antes de dar o recorte por fechado.
-  Dois erros que o build de debug atravessava em silencio so apareceram la:
-  `long` onde o console tem 32 bits (a SDK de audio usa `long` para amostras;
-  troque por `s32`/`u32`, o mesmo tipo na build PowerPC) e codigo que atravessa
-  objetos vizinhos de `.bss` como se fossem uma struct, confiando na ordem do
-  DOL. Para o segundo, confira o intervalo em `config/GALE01/symbols.txt` e,
-  sob `MELEE_HOST`, junte os objetos numa definicao so, com macros nos
-  deslocamentos originais, como em `toy.c`.
+- A data file the code reads directly as a struct (`.ssm`, `.sem`) is big-endian and usually
+  relocates 32-bit pointers in place. Survey the on-disc layout before writing the host path,
+  as with the file API.
+- An `assert` that fails right after a disc read is almost always byte order; a segfault in a
+  library allocator is almost always `gmMain` initialization that the host boot does not do
+  yet.
+- Run the same chain under `host-sanitize` before calling a slice done. Two errors the debug
+  build walked through in silence only showed up there: `long` where the console has 32 bits
+  (the audio SDK uses `long` for samples; swap it for `s32`/`u32`) and code that walks across
+  neighbouring `.bss` objects as if they were one struct, relying on the DOL's ordering. For
+  the second, check the range in `config/GALE01/symbols.txt` and, under `MELEE_HOST`, merge
+  the objects into a single definition with macros at the original offsets, as in `toy.c`.
 
-## Laco de frame da cena
+## Scene frame loop
 
 ```sh
 ./build/host-debug/port/melee-pc --run-title-scene assets-local
 ```
 
-Congela o relogio do OS, sobe o boot, entra no titulo e roda `gm_801A4D34`
-ate a cena pedir para sair. Sai com erro se nao forem os 621 frames da
-contagem e do tempo limite do titulo, sem botoes e com frames desenhados.
+Freezes the OS clock, runs the boot, enters the title and runs `gm_801A4D34` until the scene
+asks to leave. Exits with an error unless it is the 621 frames of the title's count and time
+limit, with no buttons pressed and with frames drawn.
 
-- Congele o relogio antes do boot (`melee_host_os_time_freeze`). Congelado, o
-  tempo so anda quando o jogo espera o proximo alarme em `lb_800195D0`, e cada
-  execucao repete os mesmos frames. Sem congelar, os alarmes seguem o relogio
-  de parede e o laco gira enquanto espera.
-- Uma espera que nao termina quase sempre e uma interrupcao que o host nao
-  entrega. No console elas chegam no meio de qualquer espera; no host chegam
-  em pontos escolhidos: alarmes em `lb_800195D0`, draw done em
-  `VIWaitForRetrace` e `GXWaitDrawDone`. Leia o que a espera testa e procure
-  quem mudaria aquele estado.
-- Uma cena que desenha todo frame precisa de um frame sink
-  (`melee_host_gx_set_frame_sink`), senao a captura do GX cresce sem limite.
-- Codigo de depuracao alcancavel pelo laco (`gm_801A4970`, screenshot, USB)
-  so roda sob uma condicao de `DbLevel` ou de evento. Confira a condicao antes
-  de portar; se o host nunca a satisfaz, pare com nome em `unported.c`.
+- Freeze the clock before the boot (`melee_host_os_time_freeze`). Frozen, time only advances
+  when the game waits for the next alarm in `lb_800195D0`, and every run repeats the same
+  frames. Without freezing, the alarms follow wall-clock time and the loop spins while
+  waiting.
+- A wait that never ends is almost always an interrupt the host does not deliver. On the
+  console they arrive in the middle of any wait; on the host they arrive at chosen points:
+  alarms in `lb_800195D0`, draw done in `VIWaitForRetrace` and `GXWaitDrawDone`. Read what
+  the wait tests for and look for whoever would change that state.
+- A scene that draws every frame needs a frame sink (`melee_host_gx_set_frame_sink`), or the
+  GX capture grows without bound.
+- Debug code reachable from the loop (`gm_801A4970`, screenshot, USB) only runs under a
+  `DbLevel` or event condition. Check the condition before porting; if the host never
+  satisfies it, put a named stop in `unported.c`.
 
-## Apresentacao pela janela
+## Presentation through the window
 
 ```sh
 ./build/host-debug/port/melee-pc --view-title-scene assets-local
 ./build/host-debug/port/melee-pc --view-title-scene assets-local /tmp/f.bmp 120
 ```
 
-A primeira forma abre a janela e segue ate a cena sair ou ate Esc. A segunda
-desenha escondida, grava o frame pedido e imprime a captura dele: as texturas
-com formato e tamanho, as views e as runs na ordem do jogo, cada uma com blend,
-alpha compare, programa TEV, texturas e a caixa que cobre na tela.
+The first form opens the window and runs until the scene exits or Esc is pressed. The second
+draws hidden, writes the requested frame and prints its capture: the textures with format and
+size, the views, and the runs in the game's order, each with blend, alpha compare, TEV
+program, textures and the box it covers on screen.
 
-- Para achar o que esta errado numa imagem, case a regiao com a caixa das
-  runs. Os retangulos brancos do titulo eram as runs 10 e 15, ambas com
-  textura I4, e o erro estava no decodificador, nao no shader: a conformidade
-  do TEV sorteia texels, entao nao cobre o que o decodificador entrega.
-- Uma cena pelo avesso, ou que some, e culling; confira o front face antes de
-  mexer na projecao.
-- O presenter guarda uma textura GL por endereco de imagem, e o cache do
-  titulo decodifica cada textura uma vez pelo endereco dos dados e da paleta.
-  Uma animacao que reescreva uma imagem ou uma paleta no mesmo endereco
-  precisa de outra chave.
+- To find what is wrong in an image, match the region against the runs' boxes. The title's
+  white rectangles were runs 10 and 15, both with an I4 texture, and the bug was in the
+  decoder, not the shader: TEV conformance samples random texels, so it does not cover what
+  the decoder produces.
+- A scene inside out, or one that disappears, is culling; check the front face before
+  touching the projection.
+- The presenter keeps one GL texture per image address, and the title's cache decodes each
+  texture once keyed by the address of its data and palette. An animation that rewrites an
+  image or a palette at the same address needs a different key.
 
-## Modos de jogo em sequencia
+## Game modes in sequence
 
 ```sh
 ./build/host-debug/port/melee-pc --run-modes assets-local 0 1
@@ -281,29 +248,27 @@ alpha compare, programa TEV, texturas e a caixa que cobre na tela.
     120:START 160:DOWN 200:A 240:A
 ```
 
-Comeca o roteamento do gerenciador de cenas no modo pedido (`0` e o titulo) e
-roda ate N modos, um por vez, como o laco de `gm_801A4510`: o modo corrente
-passa a anterior e o pendente a corrente (`gm_HostBeginGameModes` e
-`gm_HostRunCurrentGameMode`, sob `MELEE_HOST` em `gm_1A3F.c`). Cada modo vem da
-tabela do host (`port/src/game/game_tables.c`, no lugar de `gmscdata.c`), com o
-preload do estado, o `on_enter`, a cena, o laco de frame, o `onExit` que escolhe
-o proximo modo e a espera do cartao de memoria.
+Starts the scene manager's routing in the requested mode (`0` is the title) and runs up to N
+modes, one at a time, like `gm_801A4510`'s loop: the current mode becomes the previous one
+and the pending one becomes current (`gm_HostBeginGameModes` and
+`gm_HostRunCurrentGameMode`, under `MELEE_HOST` in `gm_1A3F.c`). Each mode comes from the
+host's table (`port/src/game/game_tables.c`, in place of `gmscdata.c`), with the state's
+preload, the `on_enter`, the scene, the frame loop, the `onExit` that picks the next mode and
+the memory card wait.
 
-Cada entrada do roteiro e `FRAME[-ULTIMO]:ENTRADA[+ENTRADA][@PORTA]`. A
-entrada e um botao (A, B, X, Y, Z, L, R, START, UP, DOWN, LEFT, RIGHT) ou
-`SX=N`/`SY=N` para o stick principal, de -128 a 127. Sem `-ULTIMO` ela e
-segurada por tres frames desenhados; com ele, ate aquele frame inclusive. Os
-frames sao contados atraves dos modos. A porta vai de 1 a 4 e e 1 quando
-omitida, e uma porta citada no roteiro fica conectada desde o primeiro frame.
+Each script entry is `FRAME[-LAST]:INPUT[+INPUT][@PORT]`. The input is a button (A, B, X, Y,
+Z, L, R, START, UP, DOWN, LEFT, RIGHT) or `SX=N`/`SY=N` for the main stick, from -128 to 127.
+Without `-LAST` it is held for three drawn frames; with it, through that frame inclusive.
+Frames are counted across modes. The port runs from 1 to 4 and is 1 when omitted, and a port
+named anywhere in the script is connected from the first frame.
 
-Cada modo imprime uma linha, precedida de uma linha por cena de estado que
-rodou. No fim saem `vs selection:` (o estagio e o personagem de cada slot
-aberto no `VsModeData`), `scenes:` e `route:`. Um modo que a tabela nao tem, ou
-um estado cuja cena ela nao tem, encerra o roteiro com `stopped:`. Os testes
-conferem essas linhas inteiras, frames incluidos.
+Each mode prints a line, preceded by one line per state scene that ran. At the end come
+`vs selection:` (the stage and the character of each open slot in `VsModeData`), `scenes:`
+and `route:`. A mode the table does not have, or a state whose scene it does not have, ends
+the script with `stopped:`. The tests check those whole lines, frame numbers included.
 
-O roteiro do teste `melee-host-vs-match-asset` atravessa a selecao do VS com
-dois pads, entra na luta e sai dela:
+The `melee-host-vs-match-asset` test's script walks VS selection with two pads, enters the
+match and leaves it:
 
 ```sh
 ./build/host-debug/port/melee-pc --run-modes assets-local 0 3 \
@@ -315,130 +280,109 @@ dois pads, entra na luta e sai dela:
     680:START 700-715:L+R+A 705-715:START 730-850:B
 ```
 
-Na CSS as portas comecam fechadas, inclusive a de um pad conectado. Cada pad
-sobe o cursor ate o botao HMN da propria porta e aperta A, pega a ficha no
-caminho ate o retrato da Fox e a solta com A; START so vale com o banner de
-pronto. Na SSS o cursor comeca em (0, -13) e sobe ate Hyrule Temple.
+On the CSS the ports start closed, including that of a connected pad. Each pad moves its
+cursor up to its own port's HMN button and presses A, picks up the token on the way to Fox's
+portrait and drops it with A; START only counts once the ready banner is up. On the SSS the
+cursor starts at (0, -13) and moves up to Hyrule Temple.
 
-Na luta a pausa so vale depois que o HUD liga (frame 655, depois do GO) e
-dez frames depois de pausar. L+R+A+START sai como no contest quando um dos
-quatro chega recem-apertado com os quatro seguros; o roteiro segura L+R+A e
-aperta START por cima. Sem a tela de resultados, o modo volta a CSS, e B
-segurado ali leva ao menu. A luta nao termina sozinha no tempo de um teste
-(passou de 1.368 frames sem acabar, e o `host-debug` desenha uns 13 frames
-por segundo), entao todo roteiro que entra nela precisa desse caminho de
-saida.
+In the match, pause only works after the HUD comes on (frame 655, after GO) and ten frames
+after pausing. L+R+A+START exits as it does in a tournament when one of the four arrives
+freshly pressed with the other four held; the script holds L+R+A and presses START on top.
+Without the results screen the mode returns to the CSS, and B held there leads to the menu.
+The match does not end on its own within a test's time budget (it went past 1,368 frames
+without ending, and `host-debug` draws about 13 frames per second), so every script that
+enters it needs this exit path.
 
-Uma entrada `FRAME:BMP=arquivo` grava aquele frame desenhado num BMP, pelo
-mesmo presenter escondido de `--view-title-scene`, e imprime triangulos, views
-e texturas da captura. Pode haver varias; a rota sai com erro se uma nao for
-gravada. Para olhar a imagem, converta com `magick f.bmp f.png`:
+An entry `FRAME:BMP=file` writes that drawn frame to a BMP through the same hidden presenter
+as `--view-title-scene`, and prints the capture's triangles, views and textures. There can be
+several; the route exits with an error if one is not written. To look at the image, convert
+it with `magick f.bmp f.png`:
 
 ```sh
 ./build/host-debug/port/melee-pc --run-modes assets-local 0 3 \
-    ... 640:BMP=/tmp/go.bmp 695:BMP=/tmp/pausa.bmp
+    ... 640:BMP=/tmp/go.bmp 695:BMP=/tmp/pause.bmp
 ```
 
-- O frame e o global da rota, o mesmo das entradas de botao. A luta do teste
-  vai do 533 ao 707, e a CSS do 243 ao 383; o 400 ja e SSS.
-- A tela de resultados so termina quando os quatro jogadores estao prontos
-  (`fn_80178050`): CPU e porta vazia ficam prontos sozinhos, e cada humano com
-  START na propria porta, depois que a animacao do painel passa do quadro 50.
-  Cada START de humano alterna entre pronto e nao pronto, entao um segundo
-  toque desfaz o primeiro. Um roteiro com START so na porta 1, ou com dois
-  START por porta, fica parado nos resultados para sempre, sem erro e sem
-  imprimir nada, porque `--run-modes` so escreve quando uma cena ou um modo
-  termina. Para ver onde uma rota parou, rode-a sob gdb com
-  breakpoints que imprimem e continuam (`commands` ... `continue`) nas funcoes
-  de entrada e no proc da cena.
-- Uma textura que o decodificador recusa imprime `texture N (format 0x..) not
-  decoded` com o motivo, e o presenter a troca por uma textura branca. Antes de
-  procurar geometria errada atras de quadrilateros brancos, confira se o mesmo
-  frame imprimiu esse aviso.
-- A captura e lida depois do ultimo draw do frame. Um estado que o draw
-  consulta e que outro draw pode mudar precisa ser copiado para a captura no
-  inicio do draw; consultado na leitura, ele devolve o do ultimo draw. Foi o
-  caso da paleta sob um nome de TLUT (`melee_host_gx_captured_texture_tlut`):
-  o sintoma era "TLUT index exceeds palette" com paletas de tamanho sem
-  relacao com o formato da textura, como 16 entradas para uma C8.
-- Uma funcao matching pode escrever por uma variavel que um caminho raro deixa
-  sem atribuir. No console o registrador ainda guarda o valor de antes; no
-  host o build de debug cai. Foi `fn_8001E60C`, com uma parte de lutador so de
-  trilhas de translacao. No crash, leia as variaveis locais (`info locals` no
-  gdb) antes de suspeitar dos dados: um ponteiro que aponta para dentro de uma
-  funcao, como `HSD_AObjAlloc+81`, e sinal disso.
-- Um union de um escalar com bit-fields (`UnkFlagStruct`: `u8 byte` e
-  `b0`..`b7`) guarda cada bit numa posicao no console e noutra no host. Uma
-  escrita ou leitura pelo escalar com valor diferente de zero muda de sentido;
-  sob `MELEE_HOST`, declare os bits na ordem inversa, como nos scripts de
-  comando. O sintoma nao e crash, e uma flag que fica 0: foi o que impedia os
-  lutadores de serem desenhados. Zerar pelo escalar nao depende da ordem.
-- O mesmo vale para um union de `s32` com bit-fields gravado inteiro a partir
-  dos dados: `fighter.c` copia `x10_animCurrFlags` de cada acao para
-  `fp->x594_s32` e le a flag de repeticao, as mascaras de partes e o tipo da
-  FigaTree pelos campos. No host a animacao da corrida parava no fim e o
-  script, com todos os timers ja vencidos, girava sem fim criando efeitos. O
-  sintoma e o processo crescendo centenas de MB por segundo num frame que nao
-  termina; nao e falta de memoria. Rode rotas longas amostrando `VmRSS` e
-  matando por PID acima de um limite, e pare no gdb no frame anterior com
-  `N:FIGHTERS` (breakpoint em `melee_host_match_fighter_position`) para ver o
-  backtrace das alocacoes.
-- Para conferir que um arquivo da decomp continua com os mesmos tokens sem
-  `MELEE_HOST`, pre-processe-o duas vezes com as flags do build tiradas de
-  `ninja -C build/host-debug -t compdb` sem o define: na arvore de trabalho e
-  num `git worktree` do HEAD, com os `-I` trocados para a raiz de cada arvore.
-  Troque o caminho do worktree pelo do repositorio antes de comparar, porque os
-  asserts embutem `__FILE__`. Um bloco novo antes de um assert desloca o
-  `__LINE__` do ramo que nao e MWCC; o ramo do MWCC passa a linha explicita,
-  mas prefira pôr macros novas num header para o arquivo manter as linhas.
-- O recorder GX guarda cada tipo de matriz onde o GX guarda: posicao e textura
-  na memoria de matrizes, normal (3x3) a parte. Um PObj iluminado carrega
-  posicao e normal no mesmo `GX_PNMTXn`, e juntar as duas faz o vertice perder
-  a translacao da camera. O sintoma e geometria gigante colada na tela. Antes
-  de suspeitar do esqueleto, confira no relatorio do `BMP=` as caixas das
-  sequencias de draw e, no gdb, as matrizes dos joints: aqui as duas coisas
-  apontaram para lados diferentes, e o erro estava entre elas.
-- Uma textura que o jogo preenche com `GXCopyTex` sai do rasterizador da CPU
-  (`melee_host_gx_copy_efb_to_i4` para a sombra, `..._to_texture` para as
-  cores), que desenha a captura do frame ate a copia e aplica as limpezas
-  pedidas antes dela. `FRAME:EFBCOPY` decodifica as copias em cor que o frame
-  usa e exige uma com pelo menos 16 cores, e um breakpoint em
-  `HSD_ImageDescCopyFromEFB` imprime quantas copias ha, de que tamanho e onde.
-  Uma area preta ou suja onde a textura e aplicada aponta para um formato que o
-  rasterizador nao faz ou para geometria que a captura nao tem. Para confirmar
-  que a area e uma copia, encha o destino com uma cor fixa dentro de
-  `GXCopyTex`, sem commit: foi assim que a faixa preta da luta se mostrou a
-  sombra.
-- Uma funcao pequena que devolve `int` pode estar lendo um ponteiro pelo
-  layout do console: `mn_80231634` devolve o `child` de um JObj como o `int`
-  em +10. O sintoma e SIGSEGV num JObj de endereco com cara de 32 bits
-  (`0x5702d640`) logo depois da chamada; procure casts como
+- The frame is the route's global frame, the same one the button entries use. The test's
+  match runs from 533 to 707, and the CSS from 243 to 383; 400 is already the SSS.
+- The results screen only finishes when all four players are ready (`fn_80178050`): a CPU and
+  an empty port become ready on their own, and each human with START on its own port, after
+  the panel animation passes frame 50. Each human START toggles between ready and not ready,
+  so a second press undoes the first. A script with START only on port 1, or with two STARTs
+  per port, hangs on the results forever, with no error and no output, because `--run-modes`
+  only writes when a scene or a mode ends. To see where a route stopped, run it under gdb with
+  breakpoints that print and continue (`commands` ... `continue`) on the entry functions and
+  on the scene's proc.
+- A texture the decoder refuses prints `texture N (format 0x..) not decoded` with the reason,
+  and the presenter swaps in a white texture. Before hunting for wrong geometry behind white
+  quads, check whether the same frame printed that warning.
+- The capture is read after the frame's last draw. State that a draw consults and that
+  another draw can change must be copied into the capture at the start of the draw;
+  consulted at read time, it returns the last draw's value. That was the case for the palette
+  under a TLUT name (`melee_host_gx_captured_texture_tlut`): the symptom was "TLUT index
+  exceeds palette" with palette sizes unrelated to the texture's format, such as 16 entries
+  for a C8.
+- A matching function may write through a variable that a rare path leaves unassigned. On the
+  console the register still holds the earlier value; on the host the debug build falls over.
+  That was `fn_8001E60C`, with a fighter part that has only translation tracks. On a crash,
+  read the local variables (`info locals` in gdb) before suspecting the data: a pointer that
+  points into a function, such as `HSD_AObjAlloc+81`, is the sign.
+- A union of a scalar with bit-fields (`UnkFlagStruct`: `u8 byte` plus `b0`..`b7`) puts each
+  bit at one position on the console and another on the host. A write or read through the
+  scalar with a non-zero value changes meaning; under `MELEE_HOST`, declare the bits in
+  reverse order, as in the command scripts. The symptom is not a crash but a flag stuck at 0:
+  that is what kept fighters from being drawn. Zeroing through the scalar does not depend on
+  the order.
+- The same goes for a union of `s32` with bit-fields written whole from the data:
+  `fighter.c` copies each action's `x10_animCurrFlags` into `fp->x594_s32` and reads the
+  repeat flag, the part masks and the FigaTree type through the fields. On the host the run
+  animation stopped at the end and the script, with every timer already expired, spun forever
+  creating effects. The symptom is the process growing hundreds of MB per second in a frame
+  that never ends; it is not running out of memory. Run long routes sampling `VmRSS` and
+  killing by PID above a threshold, and stop in gdb at the previous frame with `N:FIGHTERS`
+  (breakpoint in `melee_host_match_fighter_position`) to get the backtrace of the
+  allocations.
+- The GX recorder stores each matrix type where GX stores it: position and texture in matrix
+  memory, normal (3x3) separately. A lit PObj loads position and normal into the same
+  `GX_PNMTXn`, and merging the two makes the vertex lose the camera's translation. The
+  symptom is giant geometry stuck to the screen. Before suspecting the skeleton, check the
+  draw sequences' boxes in the `BMP=` report and the joints' matrices in gdb: here the two
+  pointed in different directions, and the bug was between them.
+- A texture the game fills with `GXCopyTex` comes out of the CPU rasterizer
+  (`melee_host_gx_copy_efb_to_i4` for the shadow, `..._to_texture` for the colours), which
+  draws the frame's capture up to the copy and applies the clears requested before it.
+  `FRAME:EFBCOPY` decodes the colour copies the frame uses and requires one with at least 16
+  colours, and a breakpoint in `HSD_ImageDescCopyFromEFB` prints how many copies there are,
+  of what size and where. A black or dirty area where the texture is applied points either at
+  a format the rasterizer does not handle or at geometry the capture does not have. To
+  confirm an area is a copy, fill the destination with a fixed colour inside `GXCopyTex`,
+  without committing: that is how the match's black band turned out to be the shadow.
+- A small function that returns `int` may be reading a pointer through the console's layout:
+  `mn_80231634` returns a JObj's `child` as the `int` at +10. The symptom is a SIGSEGV on a
+  JObj whose address looks 32-bit (`0x5702d640`) right after the call; look for casts like
   `(HSD_JObj*) mn_80231634(...)`.
-- Nos resultados de uma luta concluida, o estado 2 (`fn_80177920`) aceita
-  qualquer botao de humano e para no primeiro. Um roteiro que aperte START nas
-  duas portas no mesmo frame so passa o vencedor, e a tela espera sem fim:
-  aperte um botao antes e START nas portas depois.
-- Uma rota longa sem traco nao diz em que frame esta. `--run-modes` imprime
-  cada cena ao comecar (`scene 0xNN from frame N`), e um `N:RULES` a cada 50
-  frames serve de marcador barato para medir o ritmo, amostrado junto com o
-  `VmRSS`.
-- O relogio da luta so desce de um em um segundo, e a regra mais curta que o
-  menu oferece e um minuto, entao uma rota que espere o tempo acabar leva
-  7.200 frames de luta. `FRAME:CLOCK` imprime o relogio (`119s+3`, segundos e
-  frames dentro do segundo) e `FRAME:CLOCK=N` o deixa em N segundos: a cena
-  segue contando dali e termina a luta sozinha, com o tempo esgotado em
-  `0s+59`, que e onde `gm_GetMatchOutcome` le o time-up. O relogio so anda
-  com o HUD ligado (frame 655 nas rotas), e a entrada responde `no timer`
-  numa luta sem relogio. A rota do teste de morte subita e a longa, sem o
-  atalho, dao a mesma sequencia de cenas e o mesmo desfecho; a longa leva 49 s
-  no build `-O2`.
-- O teclado da janela so e exercitado por evento de verdade.
-  `port/tools/play_keyboard_probe.py` abre o `--play` no X11, espera a luta
-  comecar (le a linha `scene 0x02 from frame N` da saida, que so sai a tempo
-  com `stdbuf -oL`, porque num pipe o stdout do jogo sai em bloco) e manda a
-  tecla com `xdotool keydown --window`, que vai so para aquela janela e nao
-  passa pelo foco do desktop. Duas entradas `FIGHTERS` e duas `ACTION` dizem
-  o que o lutador fez:
+- On the results of a completed match, state 2 (`fn_80177920`) accepts any human button and
+  stops at the first. A script that presses START on both ports in the same frame only passes
+  the winner, and the screen waits forever: press a button first and START on the ports
+  afterwards.
+- A long route with no trace does not say which frame it is on. `--run-modes` prints each
+  scene as it starts (`scene 0xNN from frame N`), and an `N:RULES` every 50 frames is a cheap
+  marker for measuring pace, sampled alongside `VmRSS`.
+- The match clock only counts down one second at a time, and the shortest rule the menu
+  offers is one minute, so a route that waits for time to run out takes 7,200 match frames.
+  `FRAME:CLOCK` prints the clock (`119s+3`, seconds plus frames within the second) and
+  `FRAME:CLOCK=N` sets it to N seconds: the scene keeps counting from there and ends the match
+  on its own, with time up at `0s+59`, which is where `gm_GetMatchOutcome` reads the time-up.
+  The clock only advances with the HUD on (frame 655 in the routes), and the entry answers
+  `no timer` in a match without a clock. The sudden-death test's route and the long one,
+  without the shortcut, give the same scene sequence and the same outcome; the long one takes
+  49 s in the `-O2` build.
+- The window's keyboard is only exercised by a real event.
+  `port/tools/play_keyboard_probe.py` opens `--play` on X11, waits for the match to start
+  (reading the `scene 0x02 from frame N` line from the output, which only arrives in time
+  with `stdbuf -oL`, because in a pipe the game's stdout comes out in blocks) and sends the
+  key with `xdotool keydown --window`, which goes only to that window and does not go through
+  desktop focus. Two `FIGHTERS` entries and two `ACTION` entries say what the fighter did:
 
 ```sh
 DISPLAY=:1 python3 port/tools/play_keyboard_probe.py --press --key d
@@ -446,323 +390,287 @@ DISPLAY=:1 python3 port/tools/play_keyboard_probe.py --press --key j --hold 0.3
 DISPLAY=:1 python3 port/tools/play_keyboard_probe.py --no-press
 ```
 
-  Com `d` o lutador anda 109 a 131 unidades e passa por `Dash` (20), com `j`
-  fica no lugar e entra em `Attack11` (44), e sem tecla fica em `Wait` (14)
-  onde nasceu. Procure a janela pelo PID do processo, nao pelo nome: uma
-  execucao anterior deixa o titulo na lista do servidor X por um tempo e o
-  envio para um id morto e um BadWindow que o jogo nunca ve.
-- `port/tools/play_keyboard_match.py` joga a rota inteira assim: o titulo, o
-  menu, a CSS, a SSS, a luta, a pausa com a saida por L+R+A+START e os
-  resultados ate voltar a CSS, com o lado do pad 1 todo em tecla de verdade
-  (o pad 2 fica no roteiro, porque o teclado da janela e so o pad 1). O
-  relogio nao serve de referencia: cada tecla sai quando chega a linha
-  `rules frame N` do frame anterior, e o `keyup` na linha do ultimo frame em
-  que a tecla devia estar baixa, o que reproduz `330-337:SX=127` como oito
-  frames exatos. Com o `keyup` um frame tarde o cursor da CSS andava 1,24
-  unidade a mais e a rota escolhia o Ness. `--shot arquivo.png` grava a
-  propria janela com `import -window`, que e a unica imagem possivel aqui: as
-  entradas `BMP=` precisam do presenter escondido, que nao tem janela para
-  receber tecla.
-- O fog entra entre o TEV e o blend, nos dois caminhos que desenham a
-  captura, e `MELEE_HOST_FOG=0` captura tudo com `GX_FOG_NONE`. Para ver o
-  que ele muda, grave os mesmos frames com e sem e compare os BMPs; na rota
-  o titulo, o menu e a SSS mudam e a luta em Hyrule Temple nao, porque a cena
-  de luta nao instala fog. Se o shader e o rasterizador discordarem, rode a
-  conformidade: metade dos casos usa um fog linear que cai no meio da curva
-  na profundidade do quad.
-- Uma cena que espera botao prende a rota para sempre, e o laco de modos so
-  volta entre modos. `FRAME:STOP` encerra o roteiro naquele frame, com
-  "stopped at frame N" e codigo 0, depois das outras entradas do frame; as
-  linhas de resumo (`scenes:`, `route:`) nao saem, e o teste confere as
-  linhas `scene 0xNN from frame N` que saem ao vivo. As conferencias de fim
-  de rota tambem nao rodam: uma rota que pare cedo nunca falha por `MOVE` sem
-  deslocamento ou por `FALLS` sem KO.
-- O que a tela de resultados faz depois depende do save, que sem cartao
-  comeca zerado: `FRAME:MATCHES[=TOTAL]` le e escreve o total de lutas VS (50
-  e o menor que libera um personagem) e `FRAME:TROPHY=ID` da um trofeu pelo
-  caminho do jogo (`fn_80172C78`), que deixa o aviso de premio pendente. O
-  desafiante aparece para a porta do "smallest loser" da luta, que na rota de
-  estoque e a do pad 2.
-- Um valor que no console vem de um registrador some no host. Uma variavel
-  sem atribuicao num caminho (`base` em `gm_80168B34`) valia o que o MWCC
-  deixou no registrador que ela divide com um parametro, e uma funcao que
-  termina sem `return` (`gm_80168BF8`) devolve o `r3` ou o `f1` da ultima
-  chamada; no host sai o que estiver na pilha ou em outro registrador. O
-  sintoma e uma escolha absurda: o frame de uma animacao de textura que troca
-  nome, emblema ou retrato (o titulo "NO CONTEST" numa luta concluida, ruido
-  nos retratos, o emblema errado no HUD). O GCC so faz a analise com
-  otimizacao: um build `-O2` (`build/host-release`, com
-  `-fno-strict-aliasing -fwrapv` e `MELEE_HOST_WARNINGS_AS_ERRORS=OFF`) lista
-  os candidatos em `-Wmaybe-uninitialized` e `-Wreturn-type`, e acusa o
-  `gm_80168B34` original. A maioria e falso positivo; antes de mudar, leia o
-  codigo de maquina do DOL: tire os bytes da secao com o endereco, embrulhe
-  com `llvm-objcopy -I binary -O elf32-powerpc` e desmonte com
+  With `d` the fighter walks 109 to 131 units and passes through `Dash` (20), with `j` it
+  stays put and enters `Attack11` (44), and with no key it stays in `Wait` (14) where it
+  spawned. Find the window by the process's PID, not by name: a previous run leaves its title
+  in the X server's list for a while, and sending to a dead id is a BadWindow the game never
+  sees.
+- `port/tools/play_keyboard_match.py` plays the whole route that way: the title, the menu,
+  the CSS, the SSS, the match, the pause with the L+R+A+START exit and the results until it
+  returns to the CSS, with pad 1's side entirely on real key events (pad 2 stays in the
+  script, because the window's keyboard is pad 1 only). The clock is no reference: each key
+  goes out when the previous frame's `rules frame N` line arrives, and the `keyup` on the line
+  of the last frame the key should be down, which reproduces `330-337:SX=127` as exactly eight
+  frames. With the `keyup` one frame late the CSS cursor moved 1.24 units too far and the
+  route picked Ness. `--shot file.png` captures the window itself with `import -window`, which
+  is the only image possible here: the `BMP=` entries need the hidden presenter, which has no
+  window to receive a key.
+- Fog goes in between the TEV and the blend, in both paths that draw the capture, and
+  `MELEE_HOST_FOG=0` captures everything with `GX_FOG_NONE`. To see what it changes, write the
+  same frames with and without and compare the BMPs; on the route the title, the menu and the
+  SSS change and the Hyrule Temple match does not, because the match scene installs no fog. If
+  the shader and the rasterizer disagree, run conformance: half the cases use a linear fog
+  that falls in the middle of the curve at the quad's depth.
+- A scene that waits for a button traps the route forever, and the mode loop only comes back
+  between modes. `FRAME:STOP` ends the script at that frame, with "stopped at frame N" and
+  exit code 0, after the frame's other entries; the summary lines (`scenes:`, `route:`) are
+  not printed, and the test checks the `scene 0xNN from frame N` lines that come out live. The
+  end-of-route checks do not run either: a route that stops early never fails for a `MOVE`
+  with no displacement or a `FALLS` with no KO.
+- What the results screen does next depends on the save, which starts zeroed without a card:
+  `FRAME:MATCHES[=TOTAL]` reads and writes the VS match total (50 is the smallest that
+  unlocks a character) and `FRAME:TROPHY=ID` awards a trophy through the game's own path
+  (`fn_80172C78`), which leaves the prize notice pending. The challenger appears for the port
+  of the match's "smallest loser", which in the stock route is pad 2's.
+- A value that comes from a register on the console disappears on the host. A variable left
+  unassigned on one path (`base` in `gm_80168B34`) held whatever MWCC left in the register it
+  shares with a parameter, and a function that ends without `return` (`gm_80168BF8`) returns
+  the `r3` or the `f1` of the last call; on the host you get whatever is on the stack or in
+  some other register. The symptom is an absurd choice: the frame of a texture animation that
+  swaps a name, emblem or portrait (the "NO CONTEST" title in a completed match, noise in the
+  portraits, the wrong emblem in the HUD). GCC only does the analysis with optimization on: an
+  `-O2` build (`build/host-release`, with `-fno-strict-aliasing -fwrapv` and
+  `MELEE_HOST_WARNINGS_AS_ERRORS=OFF`) lists the candidates under `-Wmaybe-uninitialized` and
+  `-Wreturn-type`, and flags the original `gm_80168B34`. Most are false positives; before
+  changing anything, read the DOL's machine code: pull the section's bytes at the address,
+  wrap them with `llvm-objcopy -I binary -O elf32-powerpc` and disassemble with
   `llvm-objdump -d`.
-- As rotas roteirizadas (`--run-modes`, `--run-title-scene`) congelam o
-  relogio do OS em 3/12/2001 00:00:00. Congelado na hora do host, o relogio
-  fazia a semente depender de quando a rota rodava: o titulo sorteia um
-  `HSD_Rand` por segundo do minuto corrente, e a pose de vitoria dos
-  resultados sai dessa semente. Duas execucoes simultaneas nao mostram isso,
-  porque caem no mesmo segundo; compare execucoes em horas diferentes.
-- `FIRST-LAST:TRACE=arquivo` grava por frame a cena, a semente e o estado de
-  cada lutador, com floats em hex dos bits, e
-  `port/tools/compare_match_trace.py A B` aponta o primeiro campo diferente
-  (`--ignore campo` passa por uma diferenca ja entendida). Serve para comparar
-  duas execucoes, o `host-debug` com o build `-O2`, ou uma rota com e sem
-  `BMP=`.
-- Para achar onde vai o tempo ha `gprof` (a maquina nao tem `perf` nem
-  valgrind). Configure `build/host-profile` com `-O2 -g -pg
-  -fno-strict-aliasing -fwrapv` nas flags de C e C++ e `-pg` no link, rode a
-  rota numa pasta de trabalho (o `gmon.out` sai no diretorio corrente quando o
-  processo termina) e leia `gprof -b -p melee-pc gmon.out`. Funcoes embutidas
-  somam o tempo na que as chama: `finish_draw_locked` levava 92% da rota com
-  o laco de `transform_captured_draw_locked` dentro, que refazia todos os
-  triangulos do frame ao fim de cada draw.
-- `port/src/gx/command_recorder.cpp` e `port/src/gx/tev.cpp` compilam com
-  `-O2` em todos os presets, com `-g`: a captura GX roda por vertice e as
-  copias da EFB por fragmento, e sem otimizacao a rota VS cancelada levava
-  83,7 s (29,8 s assim). No gdb, variaveis desses dois arquivos podem aparecer
-  como `<optimized out>`; para depurar um deles, tire a propriedade no
-  `port/CMakeLists.txt` localmente.
-- Sem perf, uma amostra de onde a rota gasta tempo sai de rodar sob
-  `timeout -s INT N gdb -batch -ex run -ex "bt 12"` com alguns N diferentes;
-  tres amostras bastaram para mostrar o TEV por fragmento das copias.
-- Para medir o ritmo por cena, rode a rota com `stdbuf -oL`: num pipe o
-  `stdout` sai em bloco no fim, e as linhas `scene 0xNN from frame N` chegam
-  todas juntas.
-- Para jogar, `melee-pc --play assets-local` abre uma janela e roda os modos a
-  partir do titulo a 60 frames por segundo, com o relogio do OS na hora do
-  host. Teclado como pad 1: WASD move o stick, as setas o C-stick e o teclado
-  numerico (8, 4, 2, 6) o D-pad; J da o A, K o B, U o X, I o Y, Q o Z, H o L
-  e L o R (apertados ate o fim, com o clique digital) e Enter o START; Esc ou
-  fechar a janela encerra o processo. O titulo da janela mostra os frames por
-  segundo apresentados, duas vezes por segundo, e o som sai no dispositivo
-  padrao; o ritmo e o do campo NTSC, 59,94 frames por segundo. O primeiro gamepad substitui o teclado:
-  D-pad, gatilhos que clicam no fim do curso, e o Back encerra. Um modo ou uma cena que o host nao tem, como o filme de
-  abertura que segue o titulo parado, volta ao titulo. Entradas de roteiro
-  valem por cima do pad, e `MELEE_HOST_PLAY_HIDDEN=1` desenha num presenter
-  escondido, onde `BMP=` funciona: e assim que o `--play` e conferido sem abrir
-  janela. O build `-O2` e o indicado; o `host-debug` roda a luta abaixo de
-  60 Hz. O SDL transforma SIGTERM em fechar a janela.
-- O som toca nas rotas e no `--play`: a cada retrace o relogio AX do host roda
-  um quadro de 5 ms por 5 ms de campo, e `--run-modes` liga as vozes.
-  `MELEE_HOST_AUDIO=0` desliga as vozes e o dispositivo do `--play`; o jogo da
-  o mesmo trace com e sem som. `FIRST-LAST:WAV=arquivo` grava o que o mixer
-  toca enquanto os frames desenhados estao no intervalo, 16 bits estereo a
-  32 kHz; o cabecalho e escrito quando o intervalo termina, entao um processo
-  parado depois (o menu principal parado nunca sai sozinho) deixa um WAV
-  valido. `MELEE_HOST_AUDIO_AUX=0` deixa o reverb e o delay do jogo fora da
-  mistura; e assim que o som de uma rota se compara com decodificadores de
-  referencia, porque os efeitos enviam parte do som ao reverb.
-- `port/tools/check_route_audio.py build/host-debug/port/melee-pc assets-local`
-  roda titulo → menu → titulo gravando WAV e confere a musica `menu01.hps` e o
-  efeito 118 de `main.ssm` contra decodificadores que nao passam pelo mixer:
-  correlacao por janela a um atraso so, e o efeito com a musica subtraida. Uma
-  amostra perdida ou repetida numa juncao de bloco do stream derruba as
-  janelas seguintes.
-- Para saber o que o jogo toca e quando, quebre no gdb em `AXDriver_8038E8EC`
-  (caminho do `.hps`) e `HSD_Synth_80389334` (id do efeito), com
-  `printf "%u", VIGetRetraceCount()` nos comandos do breakpoint.
-- `port/tools/ssm_to_wav.py assets-local/audio/main.ssm --out dir` decodifica
-  as vozes ADPCM de um banco de sons em WAV e mede pico, RMS, saturacao e passo
-  medio. E a referencia do mixer AX do host: uma decodificacao errada aparece
-  como saturacao em massa. Com `--compare-host build/host-debug/port/melee-pc`
-  ele roda `melee-pc --decode-sound-bank` no mesmo banco e exige as mesmas
-  amostras em cada voz.
+- The scripted routes (`--run-modes`, `--run-title-scene`) freeze the OS clock at
+  2001-12-03 00:00:00. Frozen at the host's own time, the clock made the seed depend on when
+  the route ran: the title draws one `HSD_Rand` per second of the current minute, and the
+  results' victory pose comes out of that seed. Two simultaneous runs do not show this,
+  because they land in the same second; compare runs at different hours.
+- `FIRST-LAST:TRACE=file` records the scene, the seed and each fighter's state per frame,
+  with floats as the hex of their bits, and `port/tools/compare_match_trace.py A B` points at
+  the first differing field (`--ignore field` passes over a difference already understood).
+  It serves to compare two runs, `host-debug` against the `-O2` build, or a route with and
+  without `BMP=`.
+- To find where the time goes there is `gprof` (this machine has neither `perf` nor valgrind).
+  Configure `build/host-profile` with `-O2 -g -pg -fno-strict-aliasing -fwrapv` in the C and
+  C++ flags and `-pg` at link time, run the route from a working directory (`gmon.out` lands
+  in the current directory when the process ends) and read `gprof -b -p melee-pc gmon.out`.
+  Inlined functions add their time to the caller: `finish_draw_locked` took 92% of the route
+  with `transform_captured_draw_locked`'s loop inside it, redoing every triangle of the frame
+  at the end of each draw.
+- `port/src/gx/command_recorder.cpp` and `port/src/gx/tev.cpp` compile with `-O2` in every
+  preset, with `-g`: the GX capture runs per vertex and the EFB copies per fragment, and
+  unoptimized the cancelled VS route took 83.7 s (29.8 s this way). In gdb, variables in those
+  two files can show as `<optimized out>`; to debug one of them, remove the property in
+  `port/CMakeLists.txt` locally.
+- Without perf, a sample of where the route spends time comes from running it under
+  `timeout -s INT N gdb -batch -ex run -ex "bt 12"` with a few different N; three samples were
+  enough to show the per-fragment TEV of the copies.
+- To measure pace per scene, run the route with `stdbuf -oL`: in a pipe `stdout` comes out in
+  one block at the end, and the `scene 0xNN from frame N` lines all arrive together.
+- To play, `melee-pc --play assets-local` opens a window and runs the modes from the title at
+  60 frames per second, with the OS clock at host time. Keyboard as pad 1: WASD moves the
+  stick, the arrow keys the C-stick and the numeric keypad (8, 4, 2, 6) the D-pad; J is A, K
+  is B, U is X, I is Y, Q is Z, H is L and L is R (pressed all the way, with the digital
+  click) and Enter is START; Esc or closing the window ends the process. The window title
+  shows the frames presented per second, twice a second, and sound comes out of the default
+  device; the pace is the NTSC field's, 59.94 frames per second. The first gamepad replaces
+  the keyboard: D-pad, triggers that click at the end of travel, and Back exits. A mode or a
+  scene the host does not have, such as the opening movie that follows the stalled title,
+  returns to the title. Script entries override the pad, and `MELEE_HOST_PLAY_HIDDEN=1` draws
+  into a hidden presenter, where `BMP=` works: that is how `--play` is checked without opening
+  a window. The `-O2` build is the one to use; `host-debug` runs the match below 60 Hz. SDL
+  turns SIGTERM into closing the window.
+- Sound plays on the routes and in `--play`: on every retrace the host's AX clock runs a 5 ms
+  frame per 5 ms of field, and `--run-modes` turns the voices on. `MELEE_HOST_AUDIO=0` turns
+  off the voices and `--play`'s device; the game gives the same trace with and without sound.
+  `FIRST-LAST:WAV=file` records what the mixer plays while the drawn frames are in the range,
+  16-bit stereo at 32 kHz; the header is written when the range ends, so a process stopped
+  afterwards (the stalled main menu never leaves on its own) still leaves a valid WAV.
+  `MELEE_HOST_AUDIO_AUX=0` leaves the game's reverb and delay out of the mix; that is how a
+  route's sound is compared against reference decoders, because the effects send part of the
+  sound to the reverb.
+- `port/tools/check_route_audio.py build/host-debug/port/melee-pc assets-local` runs
+  title → menu → title recording a WAV and checks the `menu01.hps` music and effect 118 of
+  `main.ssm` against decoders that do not go through the mixer: windowed correlation at a
+  single lag, and the effect with the music subtracted. One sample lost or repeated at a
+  block junction in the stream knocks out the following windows.
+- To learn what the game plays and when, break in gdb at `AXDriver_8038E8EC` (the `.hps` path)
+  and `HSD_Synth_80389334` (the effect id), with `printf "%u", VIGetRetraceCount()` in the
+  breakpoint's commands.
+- `port/tools/ssm_to_wav.py assets-local/audio/main.ssm --out dir` decodes a sound bank's
+  ADPCM voices into WAV and measures peak, RMS, clipping and mean step. It is the reference
+  for the host's AX mixer: a wrong decode shows up as mass clipping. With
+  `--compare-host build/host-debug/port/melee-pc` it runs `melee-pc --decode-sound-bank` on
+  the same bank and requires the same samples in every voice.
 
-- O preload do estado de titulo (`lbDvdPreload_3`) mantem todos os heaps de
-  preload, e o `on_enter` da cena registra os arquivos da demo do titulo:
-  lutadores, estagio e efeitos. Eles carregam em segundo plano enquanto o
-  titulo roda, pelo devcom, e os heaps 4 e 5 ficam em ARAM. E por isso que o
-  modo alcanca `ftdata.c`, os arquivos de cada personagem e a ARQ, que a cena
-  sozinha nao alcancava.
-- Um callback que o console entrega por interrupcao nao pode rodar dentro da
-  chamada que o dispara. O devcom posta a ultima transferencia de ARAM e so
-  depois desliga o pedido; com a ARQ completando dentro de `ARQPostRequest`, o
-  callback devolvia o pedido a lista livre antes, a fila apontava para ela e
-  um pedido ja liberado voltava a rodar. O sintoma foi o assert de
-  `devcom.c:36` varios frames depois. O que o host completa por conta propria
-  entra por `melee_host_dvd_schedule_backend_task`, no passo seguinte.
-- Um valor do host que some entre ser gravado e ser lido quase sempre e escrita
-  de outro objeto de `.bss`. Um watchpoint de hardware acha quem escreveu:
-  `break` onde o valor ja esta certo e, ali, `watch -l variavel`. Foi assim que
-  apareceu `tydisplay.c` dimensionando um vetor de ponteiros como
-  `0xB0 / sizeof(HSD_Archive*)`: 44 entradas no console, 22 no host, e o laco
-  que o limpa escreve 43.
-- No `host-sanitize`, rode com `ASAN_OPTIONS=detect_leaks=0`, como o ctest
-  faz. O boot e as cenas nao liberam o que alocam, o LeakSanitizer encerra o
-  processo com codigo 1 e, com a saida redirecionada, o relatorio do comando
-  se perde porque o buffer de `std::cout` nao e esvaziado.
-- Um simbolo cujo layout so um header C do jogo descreve e traduzido em C: os
-  `types.h` dos modulos nao compilam como C++ (um membro chamado `u8` muda o
-  sentido do tipo). O tradutor e registrado pelo nome
-  (`melee_host_hsd_register_translator`) em
-  `port/src/game/game_data_translators.c`, le o arquivo pelo leitor C da API de
-  arquivo, que confere offsets, relocacoes e campos nulos, e preenche os tipos
-  do proprio jogo campo a campo, bit-fields incluidos. Levante o layout no disco
-  antes: a tabela de eventos tinha um parametro por evento, cada um com forma
-  propria, e o que nao tem forma unica fica fora com o motivo escrito.
-- Texto SIS e big-endian no disco e nos buffers que o jogo monta, e o
-  interpretador lia palavras no lugar. Uma leitura `*(u16*)` ou `*(s16*)` de
-  stream vira `HSD_SisLib_ReadU16` ou `HSD_SisLib_ReadS16` sob `MELEE_HOST`.
-- Scripts de comando (lutador, item, sobreposicao de cor) chegam ao jogo pela
-  API de arquivo ja convertidos para a ordem nativa
-  (`melee_host_hsd_reader_command_stream`), e o jogo os le pelas structs de
-  `port/src/game/host_command_layout.h`. Ao mudar uma struct de comando ou a
-  union `ColorOverlay_x8_t` em `lb/types.h`, rode
-  `port/tools/gen_host_command_layout.py`, que regenera o header e o check em
-  C; o ctest `melee-host-command-layout-generated` acusa quando isso ficou para
-  tras. Uma leitura por cast de `u8`, `u16` ou `s16` do script vira `CMD_U8`,
-  `CMD_U16` ou `CMD_S16`; a palavra `u32` inteira nao muda. Um ponteiro no
-  script so existe como operando de sub-rotina ou goto, e no host e a
-  distancia ate o alvo (`rel`).
-- O gerador so le `lb/types.h`. Uma struct de bit-fields sobre a palavra do
-  script declarada em outro lugar precisa da ordem inversa escrita a mao sob
-  `MELEE_HOST`: `itAnimlistCmdUnk` (`itanimlist.c`) e `gmScriptEventDefault`
-  (`ft/types.h`), pela qual `ftaction.c` le o opcode. Esquecida, ela nao
-  quebra na leitura: um opcode tirado dos bits baixos que valha 0 e Reset, que
-  so encerra o script, e o erro aparece longe, num comando de laco ou de
-  sub-rotina que roda sem pilha.
-- Toda lista variadica de ponteiros terminada por `0` precisa de `VA_END_PTR`
-  quando a unidade entra no build. No build de debug o `0` pode passar por
-  sorte; sob ASan a metade alta do slot vem suja e o carregador escreve num
-  endereco com os 32 bits baixos zerados, como `0x55ae00000000`.
-- Endereco guardado em `int` nao da crash onde e truncado, da um valor pela
-  metade mais adiante. Antes de alargar um lado, siga o valor ate onde ele e
-  usado: no cartao de memoria o endereco das imagens passa de `int` em `int` ate
-  a fila de comandos de 32 bits, e so a gravacao, que exige cartao, o le.
-- Converter float fora da faixa para `u8` e comportamento indefinido, e o UBSan
-  acusa. O console fica com o byte baixo, que e o que `(u8) (s32)` da.
-- O stick chega ao jogo depois do clamp do pad: 127 vira 80. O cursor da CSS
-  anda (80² - 200) × 0,0002 = 1,24 por frame, e o da SSS (80 - 30) × 0,03 =
-  1,5. Um roteiro de menu com cursor e contado em frames a partir disso, e
-  movimentos em um eixo por vez evitam o clamp octogonal da diagonal.
-- Nao calibre um roteiro pela imagem. Um script do gdb com `break` no
-  `OnFrame` da cena e `commands` que imprimem o estado (cursor, portas, ficha,
-  ou o estagio sob o cursor com `call lb_8000B1CC(jobj, 0, $v)` para a posicao
-  de mundo de cada icone) mostra frame a frame o que a entrada fez. Foi assim
-  que apareceram o clamp e a porta fechada. Rode-o com
+- The title state's preload (`lbDvdPreload_3`) keeps every preload heap, and the scene's
+  `on_enter` registers the title demo's files: fighters, stage and effects. They load in the
+  background while the title runs, through devcom, and heaps 4 and 5 sit in ARAM. That is why
+  the mode reaches `ftdata.c`, each character's files and the ARQ, which the scene alone did
+  not reach.
+- A callback the console delivers by interrupt must not run inside the call that triggers it.
+  devcom posts the last ARAM transfer and only afterwards clears the request; with the ARQ
+  completing inside `ARQPostRequest`, the callback returned the request to the free list
+  first, the queue pointed at it, and an already-freed request ran again. The symptom was the
+  `devcom.c:36` assert several frames later. Whatever the host completes on its own goes
+  through `melee_host_dvd_schedule_backend_task`, on the following step.
+- A host value that disappears between being written and being read is almost always a write
+  from another `.bss` object. A hardware watchpoint finds the writer: `break` where the value
+  is still right and, there, `watch -l variable`. That is how `tydisplay.c` turned up sizing a
+  pointer array as `0xB0 / sizeof(HSD_Archive*)`: 44 entries on the console, 22 on the host,
+  and the loop that clears it writes 43.
+- Under `host-sanitize`, run with `ASAN_OPTIONS=detect_leaks=0`, as ctest does. The boot and
+  the scenes do not free what they allocate, LeakSanitizer ends the process with code 1 and,
+  with output redirected, the command's report is lost because `std::cout`'s buffer is not
+  flushed.
+- A symbol whose layout only a game C header describes gets translated in C: the modules'
+  `types.h` do not compile as C++ (a member named `u8` changes the type's meaning). The
+  translator is registered by name (`melee_host_hsd_register_translator`) in
+  `port/src/game/game_data_translators.c`, reads the file through the file API's C reader —
+  which checks offsets, relocations and null fields — and fills the game's own types field by
+  field, bit-fields included. Survey the on-disc layout first: the event table had one
+  parameter per event, each with its own shape, and anything without a single shape stays out
+  with the reason written down.
+- SIS text is big-endian on disc and in the buffers the game assembles, and the interpreter
+  was reading words in place. A `*(u16*)` or `*(s16*)` read from the stream becomes
+  `HSD_SisLib_ReadU16` or `HSD_SisLib_ReadS16` under `MELEE_HOST`.
+- Command scripts (fighter, item, colour overlay) reach the game through the file API already
+  converted to native order (`melee_host_hsd_reader_command_stream`), and the game reads them
+  through the structs in `port/src/game/host_command_layout.h`. When changing a command struct
+  or the `ColorOverlay_x8_t` union in `lb/types.h`, run
+  `port/tools/gen_host_command_layout.py`, which regenerates the header and the C check; the
+  `melee-host-command-layout-generated` ctest flags when that has fallen behind. A read by
+  cast of `u8`, `u16` or `s16` from the script becomes `CMD_U8`, `CMD_U16` or `CMD_S16`; the
+  whole `u32` word does not change. A pointer in the script only exists as a subroutine or
+  goto operand, and on the host it is the distance to the target (`rel`).
+- The generator only reads `lb/types.h`. A bit-field struct over the script's word declared
+  elsewhere needs the reverse order written by hand under `MELEE_HOST`: `itAnimlistCmdUnk`
+  (`itanimlist.c`) and `gmScriptEventDefault` (`ft/types.h`), through which `ftaction.c`
+  reads the opcode. Forgotten, it does not break at the read: an opcode taken from the low
+  bits that comes out 0 is Reset, which merely ends the script, and the error shows up far
+  away, in a loop or subroutine command that runs with no stack.
+- Every variadic pointer list terminated by `0` needs `VA_END_PTR` when the unit enters the
+  build. In the debug build the `0` may pass by luck; under ASan the slot's high half comes in
+  dirty and the loader writes to an address with the low 32 bits zeroed, such as
+  `0x55ae00000000`.
+- An address stored in an `int` does not crash where it is truncated; it gives a half value
+  further along. Before widening one side, follow the value to where it is used: on the memory
+  card the images' address passes from `int` to `int` all the way to the 32-bit command queue,
+  and only the write, which needs a card, reads it.
+- Converting an out-of-range float to `u8` is undefined behaviour, and UBSan flags it. The
+  console keeps the low byte, which is what `(u8) (s32)` gives.
+- The stick reaches the game after the pad's clamp: 127 becomes 80. The CSS cursor moves
+  (80² - 200) × 0.0002 = 1.24 per frame, and the SSS one (80 - 30) × 0.03 = 1.5. A menu script
+  with a cursor is counted in frames from that, and moving one axis at a time avoids the
+  diagonal's octagonal clamp.
+- Do not calibrate a script from the image. A gdb script with a `break` on the scene's
+  `OnFrame` and `commands` that print the state (cursor, ports, token, or the stage under the
+  cursor with `call lb_8000B1CC(jobj, 0, $v)` for each icon's world position) shows frame by
+  frame what the input did. That is how the clamp and the closed port turned up. Run it with
   `gdb -batch -ex 'set $arg_from = N' -x script.gdb --args ...`.
-- "Memory Empty" em `sislib.c` e o pool de texto SIS da cena. Antes de mexer
-  no tamanho, tire o retrato do pool no panic: um comando Python do gdb que
-  percorre `used_head` e `free_head` somando `size` mostra quantos blocos, de
-  que tamanhos e quanto sobra. O pool do host ja e o dobro do pedido.
-- Uma cena que a tabela do host nao tem encerra o modo antes do preload do
-  estado, entao `on_enter` do estado nao roda: dados que ele montaria (o
-  `StartMeleeData` da luta, por exemplo) ainda nao existem quando o roteiro
-  para. Leia a selecao por `melee_host_vs_selection_get`.
-- Display lists, arrays de vertice, imagens e keyframes continuam big-endian no
-  host. Codigo do jogo que le esses payloads na CPU, e nao pelo GX, precisa
-  montar os valores dos bytes: foi o caso da shape animation em `pobj.c`, que
-  copiava floats com `memcpy`. O sintoma nao e crash, e geometria com
-  coordenadas absurdas ou NaN; o UBSan acusou mais adiante, na conversao para
-  `u8` da iluminacao do host. Ao ver NaN numa captura, suba ate quem produziu o
-  valor antes de proteger a conversao.
-- Um `global-buffer-overflow` do ASan numa tabela do jogo costuma ser leitura
-  que o console faz alem do fim e que cai no objeto seguinte do DOL. Confira o
-  tamanho em `config/GALE01/symbols.txt`, veja qual simbolo vem depois e leia
-  os bytes do `main.dol` extraido pelo endereco (o cabecalho do DOL da offset,
-  endereco e tamanho de cada secao). Se so alguns campos sao lidos, uma
-  entrada extra sob `MELEE_HOST` com esses bytes reproduz o console, como na
-  tabela de estagios da SSS; se o codigo atravessa objetos inteiros, junte-os
-  numa definicao so, como em `toy.c`.
-- Todo `.c` de `src/melee` ja esta no core (menos `gmscdata.c`), entao alcancar
-  uma cena nova nao pede fonte nova no CMake. O que aparece no link e outra
-  coisa: um "multiple definition" contra `unported.c` quer dizer que o modulo
-  real passou a ser puxado, e a parada deve sair; uma referencia indefinida
-  costuma ser SDK, baselib fora do core ou dado que so existe no DOL. Codigo
-  original que nao pode rodar no host como esta, como uma relocacao de 32 bits
-  no lugar, para com nome dentro do proprio modulo sob `MELEE_HOST`, com o
-  motivo, como `psInitDataBankLocate`.
-- Um tipo de funcao que o GCC recusa (`incompatible-pointer-types`) quase sempre
-  e declaracao e definicao discordando. Antes de escolher o lado, veja o que
-  quem chama passa e o que o corpo faz com o valor: `on_demo_init` parecia
-  `bool` em quase todos os estagios, mas Final Destination compara o parametro
-  com 26.
-- O `host-sanitize` descarta no link o mesmo que o `host-debug`, e todo
-  modulo compilado e instrumentado. Se um modulo que ninguem chama passar a
-  exigir simbolos so no build sanitizado, confira se
-  `-fsanitize-address-globals-dead-stripping` e `-Wl,-z,start-stop-gc`
-  continuam chegando ao compilador e ao linker: sem elas os metadados de
-  globais do ASan mantem vivo tudo o que o modulo cita. Nao volte a excluir
-  arquivos da instrumentacao; quando a lista de excecoes saiu, apareceram um
-  estouro de pilha e leituras fora de vetor que ela escondia.
-- Um intrinseco do PowerPC trocado por macro em `src/placeholder.h` precisa
-  dar o que a instrucao da, nao o que o nome lembra. `__frsqrte` e a
-  estimativa de 1/sqrt(x) (`frsqrte`): os cerca de 50 lugares que o usam
-  (`sqrtf_store`, `acosf` e `asinf` de `lbtrigf.c`, colisao, particulas,
-  itens, dinamica) refinam com passos de Newton para 1/sqrt(x) e multiplicam
-  por x. A macro devolvia `sqrt(x)`, que so converge perto de x = 1: em x = 2
-  a raiz saia negativa e em 44 dava -1,9e41. O sintoma foi o IK das pernas
-  (`lbBgFlash_80021410`, que `ft_80089B08` roda ao pousar e parado) com
-  comprimentos absurdos e angulo NaN; a matriz da coxa e de tudo abaixo dela
-  ficava NaN ate a animacao seguinte sujar o joint, e o envelope sumia com as
-  pernas do Mario e do Link. Esconder DObjs e desligar a dinamica do chapeu
-  nao tinham relacao com isso. Para achar quem grava um NaN numa matriz, arme
-  no gdb um watchpoint de hardware em `mtx[0][0]` do joint com
-  `gdb.Breakpoint(expr, gdb.BP_WATCHPOINT, gdb.WP_WRITE)` e um `stop()` que so
-  para em `math.isnan`; o backtrace aponta a conta, e o `host-debug` mostra as
-  variaveis locais. Uma rota com outro personagem sai do roteiro da Fox com
-  `break Player_80031AD0 if slot == N` e `set player_slots[N].ckind =
-  CKind_Link` nos comandos do breakpoint.
-- Uma rota que precise de outro personagem nao depende mais do gdb: o cursor
-  da CSS anda `(80*80 - 200) * 0,0002 = 1,24` unidade por frame com o stick em
-  127 (o pad entrega 80), e as caixas dos icones estao em `mncharsel.c`. Com o
-  save que a gravacao usa, a CSS mostra so os personagens desbloqueados em
-  sete colunas. Partindo do roteiro da Fox, o pad 1 alcanca o Mario segurando
-  cima por 15 frames em vez de 10 (a coluna e a mesma, uma linha acima) e o
-  pad 2 alcanca o Link segurando direita por 30 frames na linha do meio; a
-  ficha cai com A dois frames depois do ultimo frame de stick. `vs selection:`
-  confirma a escolha (`0=8 1=6` para Mario e Link).
-- Com `GXSetChanCtrl` desligando a iluminacao de um canal, o GX passa adiante
-  so a cor de material: nem o registrador de ambiente nem as luzes entram. O
-  avaliador do host partia do ambiente e multiplicava, entao todo draw sem
-  iluminacao saia pintado pela cor ambiente que o ultimo material tivesse
-  deixado no registrador. Hyrule Temple desenha o cenario assim: o estagio
-  ficava escuro o tempo todo e vermelho enquanto o bumerangue do Link voava.
-  Quando um desenho inteiro muda de tom sem que a geometria mude, compare a
-  cor de raster dos vertices capturados (`captured_vertices`) entre dois
-  frames antes de procurar luzes.
-- Codigo decompilado que escreve num slot de pilha vizinho para casar com o
-  MWCC (`*(&y + 6) = ...` em `it_802A4BFC_sqrtf_offset`, `itlinkhookshot.c`)
-  corrompe o quadro de quem chama no host. O sintoma foi um SIGBUS com o
-  backtrace destruido no `host-debug` e nenhum efeito visivel no `-O2`; o ASan
-  aponta o objeto ("stack-buffer-overflow ... 'y'"). Guarde o truque com
-  `#ifdef MELEE_HOST` e use a propria variavel; o ramo do console nao muda.
+- "Memory Empty" in `sislib.c` is the scene's SIS text pool. Before touching its size, get a
+  picture of the pool at the panic: a gdb Python command walking `used_head` and `free_head`
+  summing `size` shows how many blocks there are, of what sizes, and how much is left. The
+  host's pool is already twice what was asked for.
+- A scene the host table does not have ends the mode before the state's preload, so the
+  state's `on_enter` does not run: data it would assemble (the match's `StartMeleeData`, for
+  instance) does not exist yet when the script stops. Read the selection through
+  `melee_host_vs_selection_get`.
+- Display lists, vertex arrays, images and keyframes are still big-endian on the host. Game
+  code that reads those payloads on the CPU, rather than through GX, has to assemble the
+  values from the bytes: that was the case for the shape animation in `pobj.c`, which copied
+  floats with `memcpy`. The symptom is not a crash but geometry with absurd coordinates or
+  NaN; UBSan flagged it further along, in the host lighting's conversion to `u8`. On seeing a
+  NaN in a capture, walk up to whoever produced the value before guarding the conversion.
+- An ASan `global-buffer-overflow` on a game table is usually a read the console makes past
+  the end that lands in the DOL's next object. Check the size in `config/GALE01/symbols.txt`,
+  see which symbol comes next and read the bytes of the extracted `main.dol` by address (the
+  DOL header gives offset, address and size of each section). If only a few fields are read,
+  an extra entry under `MELEE_HOST` with those bytes reproduces the console, as in the SSS's
+  stage table; if the code walks across whole objects, merge them into a single definition, as
+  in `toy.c`.
+- Every `.c` in `src/melee` is already in the core (except `gmscdata.c`), so reaching a new
+  scene needs no new source in CMake. What shows up at link time is another matter: a
+  "multiple definition" against `unported.c` means the real module is now being pulled in and
+  the stop must go; an undefined reference is usually SDK, baselib outside the core, or data
+  that only exists in the DOL. Original code that cannot run on the host as written, such as a
+  32-bit in-place relocation, gets a named stop inside its own module under `MELEE_HOST`, with
+  the reason, like `psInitDataBankLocate`.
+- A function type GCC refuses (`incompatible-pointer-types`) is almost always the declaration
+  and the definition disagreeing. Before picking a side, look at what the callers pass and
+  what the body does with the value: `on_demo_init` looked like `bool` on nearly every stage,
+  but Final Destination compares the parameter against 26.
+- `host-sanitize` discards the same things at link time as `host-debug`, and every compiled
+  module is instrumented. If a module nobody calls starts demanding symbols only in the
+  sanitized build, check that `-fsanitize-address-globals-dead-stripping` and
+  `-Wl,-z,start-stop-gc` still reach the compiler and the linker: without them ASan's globals
+  metadata keeps alive everything the module names. Do not go back to excluding files from
+  instrumentation; when the exception list went away, a stack overflow and out-of-array reads
+  it had been hiding showed up.
+- A PowerPC intrinsic replaced by a macro in `src/placeholder.h` must give what the
+  instruction gives, not what the name suggests. `__frsqrte` is the estimate of 1/sqrt(x)
+  (`frsqrte`): the roughly 50 places that use it (`sqrtf_store`, `acosf` and `asinf` in
+  `lbtrigf.c`, collision, particles, items, dynamics) refine it with Newton steps for
+  1/sqrt(x) and multiply by x. The macro returned `sqrt(x)`, which only converges near x = 1:
+  at x = 2 the root came out negative and at 44 it gave -1.9e41. The symptom was the legs' IK
+  (`lbBgFlash_80021410`, which `ft_80089B08` runs on landing and while idle) with absurd
+  lengths and a NaN angle; the thigh's matrix and everything below it stayed NaN until the
+  next animation dirtied the joint, and the envelope took Mario's and Link's legs with it.
+  Hiding DObjs and switching off the hat's dynamics had nothing to do with it. To find who
+  writes a NaN into a matrix, set a hardware watchpoint in gdb on the joint's `mtx[0][0]` with
+  `gdb.Breakpoint(expr, gdb.BP_WATCHPOINT, gdb.WP_WRITE)` and a `stop()` that only stops on
+  `math.isnan`; the backtrace points at the arithmetic, and `host-debug` shows the locals. A
+  route with a different character leaves the Fox script with
+  `break Player_80031AD0 if slot == N` and `set player_slots[N].ckind = CKind_Link` in the
+  breakpoint's commands.
+- A route that needs another character no longer depends on gdb: the CSS cursor moves
+  `(80*80 - 200) * 0.0002 = 1.24` units per frame with the stick at 127 (the pad delivers 80),
+  and the icons' boxes are in `mncharsel.c`. With the save the recording uses, the CSS shows
+  only the unlocked characters in seven columns. Starting from the Fox script, pad 1 reaches
+  Mario by holding up for 15 frames instead of 10 (same column, one row up) and pad 2 reaches
+  Link by holding right for 30 frames on the middle row; the token drops with A two frames
+  after the last stick frame. `vs selection:` confirms the choice (`0=8 1=6` for Mario and
+  Link).
+- With `GXSetChanCtrl` disabling a channel's lighting, GX passes on the material colour only:
+  neither the ambient register nor the lights come in. The host's evaluator started from the
+  ambient and multiplied, so every unlit draw came out painted by whatever ambient colour the
+  last material had left in the register. Hyrule Temple draws its scenery that way: the stage
+  was dark the whole time and red while Link's boomerang flew. When a whole drawing changes
+  tone without the geometry changing, compare the captured vertices' raster colour
+  (`captured_vertices`) between two frames before going looking for lights.
+- Decompiled code that writes into a neighbouring stack slot to match MWCC
+  (`*(&y + 6) = ...` in `it_802A4BFC_sqrtf_offset`, `itlinkhookshot.c`) corrupts the caller's
+  frame on the host. The symptom was a SIGBUS with a destroyed backtrace in `host-debug` and
+  no visible effect at `-O2`; ASan names the object ("stack-buffer-overflow ... 'y'"). Guard
+  the trick with `#ifdef MELEE_HOST` and use the variable itself; the console branch does not
+  change.
 
-## Carga de cena pela camada de objetos
+## Scene loading through the object layer
 
-O comando abaixo materializa os descritores do arquivo em layout host e chama
-`HSD_JObjLoadJoint`, que e o mesmo entrypoint que toda cena do jogo usa. Ele
-reporta o que os loaders originais construiram:
+The command below materializes the file's descriptors in host layout and calls
+`HSD_JObjLoadJoint`, which is the same entry point every scene in the game uses. It reports
+what the original loaders built:
 
 ```sh
 ./build/host-debug/port/melee-pc --load-scene \
     assets-local/GmPause.dat ScGamPause_scene_data
 ```
 
-O terceiro argumento opcional escolhe o modelo dentro de `SceneDesc.models`.
-Um simbolo publico que nomeia um joint direto entra pelo outro comando:
+The optional third argument picks the model inside `SceneDesc.models`. A public symbol that
+names a joint directly goes through the other command:
 
 ```sh
 ./build/host-debug/port/melee-pc --load-joint \
     assets-local/PlMrNr.dat PlyMario5K_Share_joint
 ```
 
-As contagens de PObj e de blocos de display list podem ser comparadas com as
-que `--inspect-pobj` produz pelo schema de leitura separado; as duas rotas leem
-o mesmo arquivo por caminhos independentes, entao divergencia entre elas e
-sinal de erro em uma das duas.
+The PObj and display-list block counts can be compared against those `--inspect-pobj`
+produces through the separate reading schema; the two routes read the same file by
+independent paths, so a divergence between them is a sign of a bug in one of them.
 
-Ao estender o materializador, prefira recusar um campo que ainda nao sabe
-traduzir a adivinhar sua forma. Um ponteiro errado entregue aos loaders
-originais aparece muito depois, longe da causa.
+When extending the materializer, prefer refusing a field you do not yet know how to translate
+over guessing its shape. A wrong pointer handed to the original loaders shows up much later,
+far from the cause.
 
-## Animacao
+## Animation
 
-O comando abaixo carrega um modelo, anexa uma animacao por
-`HSD_JObjAddAnimAll` e avanca N frames com `HSD_JObjAnimAll`, relatando quantas
-juntas se moveram:
+The command below loads a model, attaches an animation through `HSD_JObjAddAnimAll` and
+advances N frames with `HSD_JObjAnimAll`, reporting how many joints moved:
 
 ```sh
 ./build/host-debug/port/melee-pc --animate-joint \
@@ -770,21 +678,19 @@ juntas se moveram:
     assets-local/GmTtAll.dat TtlMoji_Top_animjoint TtlMoji_Top_matanim_joint 200
 ```
 
-Use `-` no lugar de um simbolo que o arquivo nao tem. O arquivo de animacao
-pode ser outro: e assim que um personagem guarda o modelo e os movimentos
-separados.
+Use `-` in place of a symbol the file does not have. The animation file can be a different
+one: that is how a character keeps its model and its moves apart.
 
-Duas leituras do relatorio evitam um diagnostico errado:
+Two readings of the report avoid a wrong diagnosis:
 
-- `AObj frame` e a unica prova de que a animacao avancou. Ele conta N-1 para N
-  chamadas, porque a primeira interpretacao usa taxa zero devido a
-  `AOBJ_FIRST_PLAY`.
-- `joints moved` pode ser zero com a animacao rodando perfeitamente: animacao
-  de material muda cor e textura sem mexer no esqueleto. Olhe o frame antes de
-  concluir que nada funcionou.
+- `AObj frame` is the only proof that the animation advanced. It counts N-1 for N calls,
+  because the first interpretation uses a rate of zero due to `AOBJ_FIRST_PLAY`.
+- `joints moved` can be zero with the animation running perfectly: a material animation
+  changes colour and texture without touching the skeleton. Look at the frame before
+  concluding that nothing worked.
 
-As animacoes de personagem ficam em um arquivo por personagem que guarda
-varios arquivos HSD enfileirados, um por acao. Liste e toque por nome:
+Character animations live in one file per character holding several HSD files in sequence,
+one per action. List them and play one by name:
 
 ```sh
 ./build/host-debug/port/melee-pc --list-animations assets-local/PlMrAJ.dat
@@ -793,21 +699,20 @@ varios arquivos HSD enfileirados, um por acao. Liste e toque por nome:
     assets-local/PlMrAJ.dat PlyMario5K_Share_ACTION_WalkMiddle_figatree 45
 ```
 
-Esse caminho nao usa as arvores HSD: um personagem usa `FigaTree`, o formato
-proprio do Melee, e `lbAnim_8001E6D8` o aplica direto a um `HSD_JObj`. O
-mapeamento de osso e posicional, entao um modelo e uma animacao de personagens
-diferentes vao anexar sem erro e produzir lixo; confira que os prefixos dos
-simbolos combinam.
+That path does not use the HSD trees: a character uses `FigaTree`, Melee's own format, and
+`lbAnim_8001E6D8` applies it directly to an `HSD_JObj`. The bone mapping is positional, so a
+model and an animation from different characters will attach without error and produce
+garbage; check that the symbols' prefixes match.
 
-Um AObj recem-carregado ja toca a um frame por chamada, porque `HSD_AObjAlloc`
-deixa `framerate` em 1.0. Definir a taxa serve para escolher outra velocidade
-ou o sentido inverso, que e o que o jogo faz por acao de lutador.
+A freshly loaded AObj already plays at one frame per call, because `HSD_AObjAlloc` leaves
+`framerate` at 1.0. Setting the rate is for choosing another speed or the reverse direction,
+which is what the game does per fighter action.
 
-## Render pela camada original
+## Rendering through the original layer
 
-Os mesmos dois comandos com `--render-` em vez de `--load-` desenham a arvore
-por `HSD_JObjDispAll`, nas tres passagens do callback de render original, e
-relatam o que chegou ao recorder GX:
+The same two commands with `--render-` instead of `--load-` draw the tree through
+`HSD_JObjDispAll`, in the original render callback's three passes, and report what reached the
+GX recorder:
 
 ```sh
 ./build/host-debug/port/melee-pc --render-scene \
@@ -816,20 +721,18 @@ relatam o que chegou ao recorder GX:
     assets-local/PlMrNr.dat PlyMario5K_Share_joint
 ```
 
-Duas linhas do relatorio valem mais que a contagem de triangulos:
+Two lines of the report are worth more than the triangle count:
 
-- `display list errors` diferente de zero significa que o stream que o codigo
-  original entregou ao GX nao e um que o host consegue seguir.
-- `rejected vertex indices` diferente de zero significa que um indice caiu fora
-  do array e o atributo foi descartado, entao a captura esta incompleta. Isso
-  nao aparece na geometria: o vertice so fica sem aquele atributo. Trate como
-  erro, nao como aviso.
+- `display list errors` other than zero means the stream the original code handed to GX is
+  not one the host can follow.
+- `rejected vertex indices` other than zero means an index fell outside the array and the
+  attribute was discarded, so the capture is incomplete. This does not show up in the
+  geometry: the vertex merely lacks that attribute. Treat it as an error, not a warning.
 
-O espaco em que os vertices saem depende da view que o comando pede. Os
-comandos `--render-` usam a camera da cena, como o jogo, e entregam espaco de
-vista. Os comandos de preview pedem view identidade, o que deixa as matrizes
-carregadas no GX como transformacoes de mundo, porque quem move a camera ali e
-o proprio visualizador:
+The space the vertices come out in depends on the view the command asks for. The `--render-`
+commands use the scene's camera, like the game, and deliver view space. The preview commands
+ask for an identity view, which leaves the matrices loaded into GX as world transforms,
+because what moves the camera there is the viewer itself:
 
 ```sh
 ./build/host-debug/port/melee-pc --view-scene \
@@ -838,30 +741,28 @@ o proprio visualizador:
     assets-local/PlMrNr.dat PlyMario5K_Share_joint
 ```
 
-A janela mostra a geometria que o caminho de display original desenhou. Cada
-draw e colorido pelo seu programa TEV avaliado por fragmento, com as texturas de
-todos os mapas que os estagios amostram e as coordenadas que o texgen original
-gerou. `--view-pobj` continua mostrando o que o schema de leitura decodifica por
-conta propria, com um estagio MODULATE no lugar do material, e serve de segunda
-opiniao quando as duas imagens divergem.
+The window shows the geometry the original display path drew. Each draw is coloured by its TEV
+program evaluated per fragment, with the textures of every map the stages sample and the
+coordinates the original texgen generated. `--view-pobj` still shows what the reading schema
+decodes on its own, with a MODULATE stage in place of the material, and serves as a second
+opinion when the two images disagree.
 
-Os comandos `--render-` listam os estados capturados, um por linha. Vale ler
-essas linhas antes de culpar a geometria: `blend=1` com `zwrite=0` e o modo
-translucido normal do HSD, `cull=0` marca um objeto de duas faces, e `alpha`
-diferente de `7@0` significa que o material recorta por alpha.
+The `--render-` commands list the captured states, one per line. It is worth reading those
+lines before blaming the geometry: `blend=1` with `zwrite=0` is HSD's normal translucent mode,
+`cull=0` marks a two-sided object, and an `alpha` other than `7@0` means the material clips by
+alpha.
 
-A linha `TEV evaluated per fragment` diz quantos triangulos tem o programa TEV
-reproduzido por inteiro e quantos usam algo que o port ainda nao modela; a
-linha `tev N` de cada programa diz o que falta (`unmodelled=bump texgen`). O
-preview gera um shader GLSL por programa distinto a partir de
-`port/src/gx/tev.cpp`, com a aritmetica inteira do hardware, e registradores e
-konst entram como uniforms, entao o mesmo material com outra cor nao gera outro
-shader.
+The `TEV evaluated per fragment` line says how many triangles have their TEV program
+reproduced in full and how many use something the port does not model yet; each program's
+`tev N` line says what is missing (`unmodelled=bump texgen`). The preview generates one GLSL
+shader per distinct program from `port/src/gx/tev.cpp`, with the hardware's integer
+arithmetic, and registers and konst come in as uniforms, so the same material in another
+colour does not generate another shader.
 
-Ao mexer no avaliador ou no gerador, rode a conformidade. Ela desenha cada par
-de programa TEV e estado de pixel da captura num alvo de um pixel, com cores
-rasterizadas e texels aleatorios, e exige que o pixel lido seja o que
-`melee::gx::evaluate_tev` e o alpha test calculam, descarte incluido:
+When touching the evaluator or the generator, run conformance. It draws each pair of TEV
+program and pixel state from the capture into a one-pixel target, with rasterized colours and
+random texels, and requires the pixel read back to be what `melee::gx::evaluate_tev` and the
+alpha test compute, discard included:
 
 ```sh
 ./build/host-debug/port/melee-pc --tev-conformance-joint \
@@ -870,54 +771,48 @@ rasterizadas e texels aleatorios, e exige que o pixel lido seja o que
     assets-local/GmPause.dat ScGamPause_scene_data
 ```
 
-Uma divergencia significa que o GLSL e a referencia discordam. A referencia e a
-que tem testes unitarios contra a formula do hardware, entao comece suspeitando
-do gerador.
+A divergence means the GLSL and the reference disagree. The reference is the one with unit
+tests against the hardware's formula, so start by suspecting the generator.
 
-Para obter uma imagem sem abrir janela, defina `MELEE_HOST_SCREENSHOT` com um
-caminho `.bmp`; o comando `--view-` renderiza um quadro fora da tela e sai:
+To get an image without opening a window, set `MELEE_HOST_SCREENSHOT` to a `.bmp` path; the
+`--view-` command renders one frame off-screen and exits:
 
 ```sh
 MELEE_HOST_SCREENSHOT=/tmp/mario.bmp ./build/host-debug/port/melee-pc \
     --view-joint assets-local/PlMrNr.dat PlyMario5K_Share_joint
 ```
 
-Um modelo solto nao tem as luzes do estagio. O render da fachada registra uma
-luz ambiente e uma infinita pelo `HSD_LObj` original, como ja fazia com a
-camera substituta. Sem elas todo material iluminado sai preto: o ambiente do
-canal e o ambiente do material multiplicado pela luz ambiente corrente, e sem
-luz ambiente ele vale zero. Um preview preto com conformidade limpa quase sempre
-e isso, e nao o shader.
+A model on its own has none of the stage's lights. The façade's render registers an ambient
+light and an infinite one through the original `HSD_LObj`, as it already did with the stand-in
+camera. Without them every lit material comes out black: the channel's ambient is the
+material's ambient multiplied by the current ambient light, and with no ambient light it is
+zero. A black preview with clean conformance is almost always this, not the shader.
 
-Um detalhe que confunde quem for mexer nisso: `HSD_TExpSetReg` monta os valores
-de registrador em um array local nao inicializado e escreve so os componentes
-que a expressao nomeia. O que sobra e lixo de pilha que chega ao GX. Nao afeta a
-imagem, porque nenhum estagio le esses componentes, mas qualquer comparacao de
-estado TEV precisa ignora-los, senao o mesmo material conta como varios e a
-contagem muda entre builds e entre execucoes.
+One detail that trips up anyone touching this: `HSD_TExpSetReg` assembles the register values
+in an uninitialized local array and writes only the components the expression names. What is
+left over is stack garbage that reaches GX. It does not affect the image, because no stage
+reads those components, but any comparison of TEV state has to ignore them, or the same
+material counts as several and the count changes between builds and between runs.
 
-Na janela, F inverte a face frontal. A convencao adotada e a do GX, sentido
-horario como frente, e nao foi verificada visualmente: se um modelo aparecer do
-lado de dentro, essa tecla e o primeiro teste.
+In the window, F flips the front face. The convention adopted is GX's, clockwise as front, and
+it has not been verified visually: if a model shows up inside out, that key is the first test.
 
-Ao comparar com `--inspect-pobj`, lembre que as duas rotas nao cobrem o mesmo
-conjunto. O schema percorre todos os modelos da cena e desenha tudo; o caminho
-original desenha um modelo por chamada e pula objeto escondido e PObj que
-descarta as duas faces. Compare so em cena de um modelo, e confira a linha
-`not drawn` antes de concluir que a divergencia e um bug.
+When comparing against `--inspect-pobj`, remember the two routes do not cover the same set.
+The schema walks every model in the scene and draws everything; the original path draws one
+model per call and skips hidden objects and PObjs that cull both faces. Compare only on a
+single-model scene, and check the `not drawn` line before concluding the divergence is a bug.
 
-Para testar a ponte DVD contra um arquivo realmente extraido sem iniciar o
-jogo, leia uma amostra do recurso pelo nome de FST:
+To test the DVD bridge against a genuinely extracted file without starting the game, read a
+sample of the resource by its FST name:
 
 ```sh
 ./build/host-debug/port/melee-pc --read-resource assets-local DbCo.dat
 ```
 
-## Regras durante o bootstrap
+## Rules during the bootstrap
 
-- `configure.py` e o build matching continuam sendo o oraculo PowerPC.
-- Codigo host usa `MELEE_HOST`; mudancas sem esse define nao podem alterar o DOL.
-- Codigo novo do port trata warnings como erro.
-- Codigo decompilado usa warnings de legado, sem reformatacao ou casts cosmeticos
-  que prejudiquem matching.
-- Nenhum asset do jogo entra no repositorio ou nos artefatos publicos de CI.
+- Host code uses `MELEE_HOST`. The non-host branch of a decompiled file is the console's
+  behaviour and stays readable as such.
+- New port code treats warnings as errors.
+- Decompiled code keeps the legacy warning set, without reformatting or cosmetic casts.
+- No game asset enters the repository or the public CI artifacts.
