@@ -1,7 +1,0 @@
-[workspace]
-members = [
-    "tools/flags",
-    "tools/replace-symbols",
-    "tools/rust-utils",
-]
-resolver = "2"

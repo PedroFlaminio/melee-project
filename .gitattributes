@@ -9,14 +9,13 @@ text eol=lf
 # Never use CRLF for Unix bash scripts
 *.sh -crlf
 
-# decomp-toolkit writes files with LF
+# The GALE01 symbol map is stored with LF
 config/**/*.txt  text eol=lf
 
 # Explicitly declare text files you want to always be normalized and converted
 # to native line endings on checkout.
 *.c text
 *.h text
-*.s text
 *.py text
 *.mk text
 Makefile text
