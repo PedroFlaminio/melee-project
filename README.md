@@ -1,31 +1,74 @@
 # Super Smash Bros. Melee PC Port
 
-Este projeto é um port nativo de Super Smash Bros. Melee para PC (Windows e Linux). Inicialmente criado a partir de um fork do projeto de decompilação do Melee (`doldecomp/melee`), o foco deste repositório agora foi inteiramente redirecionado para a criação de um executável nativo do jogo, não necessitando de emuladores (como o Dolphin) ou execução de código PowerPC.
+A native port of Super Smash Bros. Melee to PC (Windows and Linux). The project started as
+a fork of the Melee decompilation (`doldecomp/melee`), but this repository is now aimed
+entirely at producing a native executable of the game — no emulator (such as Dolphin) and
+no PowerPC code execution.
 
-## Visão Geral
+## Overview
 
-Enquanto o projeto de decompilação original tem como objetivo reconstruir um executável 1:1 (`main.dol`) idêntico ao de GameCube para documentação e mods, este port nativo recompila o código fonte em C (gameplay, personagens, menus) diretamente para plataformas modernas (como a arquitetura x86-64 do PC).
+Where the original decompilation aims to rebuild a 1:1 GameCube executable (`main.dol`) for
+documentation and modding, this port compiles the game's C source (gameplay, characters,
+menus) directly for modern platforms such as PC x86-64.
 
-Para que isso seja possível, uma nova camada de abstração de plataforma está sendo desenvolvida para substituir as dependências diretas ao hardware e SDK do GameCube (como OS, GX, VI, DVD, PAD, CARD, AX, ARAM, DSP e THP) por equivalentes modernos (OpenGL/Vulkan, SDL, etc). O modelo arquitetural adotado é semelhante ao de projetos notáveis de decompilação como o *Ship of Harkinian*.
+To make that possible, a new platform abstraction layer replaces the direct dependencies on
+GameCube hardware and SDK (OS, GX, VI, DVD, PAD, CARD, AX, ARAM, DSP and THP) with modern
+equivalents (OpenGL/Vulkan, SDL, and so on). The architectural model follows notable
+decompilation-based ports such as *Ship of Harkinian*.
 
-### Distribuição e Recursos Legais
-- **Nenhum Asset Protegido:** O código-fonte presente neste repositório e os eventuais executáveis distribuídos **não** conterão assets originais de propriedade da Nintendo (modelos, áudios, texturas, etc).
-- **Traga o seu próprio jogo (BYOG):** Para que o jogo funcione, o usuário precisará fornecer um dump (ISO/GCM) de uma cópia legítima de Super Smash Bros. Melee (versão alvo inicial: `GALE01` NTSC-U 1.02). Na primeira execução, o port irá extrair os arquivos e assets necessários para uma pasta local de recursos a fim de ser carregado pelo jogo.
-- **Melhorias do Port PC:** Resoluções flexíveis e customizáveis, suporte direto para gamepads/teclado de PC via bibliotecas modernas e melhorias framerate.
+### Distribution and legal resources
 
-## Documentação
+- **No protected assets:** neither the source in this repository nor any executable
+  distributed from it contains original Nintendo-owned assets (models, audio, textures and
+  the like).
+- **Bring your own game (BYOG):** to run the game you must supply a dump (ISO/GCM) of a
+  legitimate copy of Super Smash Bros. Melee (initial target version: `GALE01` NTSC-U 1.02).
+  On first run the port extracts the files and assets it needs into a local resource folder
+  for the game to load.
+- **PC port improvements:** flexible, customizable resolutions, direct gamepad and keyboard
+  support through modern libraries, and framerate improvements.
 
-Para informações detalhadas sobre a arquitetura do port, atualizações de progresso, plano para a liberação da versão de testes (MVP) e os principais desafios técnicos de portabilidade em relação à base de decompilação original, confira a pasta [`docs/`](docs/).
+## Building
 
-Recomendamos a leitura dos documentos principais do planejamento técnico:
-- [Plano Inicial do Port Nativo PC](docs/native_pc_port_plan.md)
-- [Status Atual do Port Nativo](docs/native_port_status.md)
-- [Desenvolvimento do Port Nativo](docs/native_port_development.md)
-- [Documento Base: Como Começar](docs/getting_started.md)
+Requirements: CMake 3.25 or newer, Ninja, a C17/C++20 compiler, and SDL2 with an OpenGL
+driver for the windowed build.
 
-## Como Compilar
+```sh
+cmake --preset host-debug          # configure
+cmake --build --preset host-debug  # build
+ctest --preset host-debug          # run the test suite
+```
 
-*(As instruções de compilação completas da versão PC para Windows/Linux estarão disponíveis assim que a infraestrutura de build estiver concluída nesta fase de transição.)*
+The release preset builds the playable executable:
+
+```sh
+cmake --build --preset host-release --target melee-pc
+./build/host-release/port/melee-pc --play assets-local
+```
+
+`assets-local/` is the resource folder extracted from your own disc image; it is never
+committed. Presets for Clang on Visual Studio (`host-debug-windows`,
+`host-release-windows`) and for an ASan/UBSan build (`host-sanitize`) are defined in
+`CMakePresets.json`.
+
+## Documentation
+
+For details on the port's architecture, progress updates, the plan toward the test (MVP)
+release, and the main technical porting challenges relative to the decompilation base, see
+the [`docs/`](docs/) folder — [`docs/README.md`](docs/README.md) indexes it.
+
+The main technical planning documents are:
+
+- [Native PC port plan](docs/native_pc_port_plan.md)
+- [Native port status](docs/native_port_status.md)
+- [Native port development](docs/native_port_development.md)
+- [MVP progress](docs/port-mvp-progress.md)
+
+Contribution guidelines live in [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 
 ---
-**Aviso Legal:** *Este projeto é um esforço de código aberto, não oficial, feito por fãs, dedicado à preservação técnica e estudo de engenharia de software através da engenharia reversa do jogo original. Super Smash Bros. Melee e seus respectivos assets, designs e nomes são propriedades registradas e intelectuais da Nintendo.*
+
+**Legal notice:** *This project is an unofficial, open-source, fan-made effort dedicated to
+technical preservation and to the study of software engineering through reverse engineering
+of the original game. Super Smash Bros. Melee and its respective assets, designs and names
+are registered and intellectual properties of Nintendo.*

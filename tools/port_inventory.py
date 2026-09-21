@@ -105,13 +105,6 @@ def scan_group(root: Path, files: list[Path]) -> dict[str, object]:
 
 
 def build_inventory(root: Path) -> dict[str, object]:
-    configure_path = root / "configure.py"
-    configure_text = configure_path.read_text(encoding="utf-8")
-    matching_objects = len(re.findall(r"\bObject\(Matching\s*,", configure_text))
-    nonmatching_objects = len(
-        re.findall(r"\bObject\((?:NonMatching|Equivalent)\s*,", configure_text)
-    )
-
     assembly_files = sorted(
         path.relative_to(root).as_posix()
         for base in (root / "src", root / "extern" / "dolphin")
@@ -121,11 +114,7 @@ def build_inventory(root: Path) -> dict[str, object]:
     )
 
     return {
-        "schema_version": 1,
-        "decomp_objects": {
-            "matching": matching_objects,
-            "nonmatching_or_equivalent": nonmatching_objects,
-        },
+        "schema_version": 2,
         "assembly_files": assembly_files,
         "game_and_baselib": scan_group(root, source_files(root, ("src",))),
         "dolphin_sdk": scan_group(
