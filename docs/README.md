@@ -4,13 +4,18 @@ Everything in this folder is about the native PC port. Documentation is written 
 
 ## Planning and status
 
+- [**Project progress**](project-progress.md) — **the running progress document.** Overall
+  estimate against the 1.0 definition, per-area breakdown, milestones and the update log.
+  Update this one with every change that moves the port forward.
 - [**Native PC port plan**](native_pc_port_plan.md) — the project plan: scope, architecture,
   technical decisions, verification strategy, roadmap and risks. Start here.
 - [**Native port status**](native_port_status.md) — what is done, what is in progress, the next
   gates, and the current limitations. The limitations section is the one to read before
   assuming something works.
 - [**MVP progress**](port-mvp-progress.md) — the MVP definition, a per-area estimate, the
-  verified evidence behind it and the change log.
+  verified evidence behind it and the change log. The MVP closed at 100% on 16 September 2026;
+  this is a finished record, superseded for ongoing tracking by
+  [project-progress.md](project-progress.md).
 - [**Port progress (characters and stages)**](port-characters-stages.md) — per-character and
   per-stage table.
 

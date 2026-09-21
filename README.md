@@ -53,16 +53,16 @@ committed. Presets for Clang on Visual Studio (`host-debug-windows`,
 
 ## Documentation
 
-For details on the port's architecture, progress updates, the plan toward the test (MVP)
-release, and the main technical porting challenges relative to the decompilation base, see
-the [`docs/`](docs/) folder — [`docs/README.md`](docs/README.md) indexes it.
+For details on the port's architecture, how far along it is, and the main technical porting
+challenges relative to the decompilation base, see the [`docs/`](docs/) folder —
+[`docs/README.md`](docs/README.md) indexes it.
 
-The main technical planning documents are:
+The main documents are:
 
-- [Native PC port plan](docs/native_pc_port_plan.md)
-- [Native port status](docs/native_port_status.md)
-- [Native port development](docs/native_port_development.md)
-- [MVP progress](docs/port-mvp-progress.md)
+- [Project progress](docs/project-progress.md) — how far along the port is, by area
+- [Native PC port plan](docs/native_pc_port_plan.md) — scope, architecture and roadmap
+- [Native port status](docs/native_port_status.md) — what works, and what does not yet
+- [Native port development](docs/native_port_development.md) — building, running and debugging
 
 Contribution guidelines live in [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 

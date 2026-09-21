@@ -621,6 +621,8 @@ Each translator below unblocked the next step of match entry, in this order:
 - `__frsqrte` is `1.0 / sqrt(x)` (`src/placeholder.h`). The console starts from `frsqrte`'s table
   estimate and the host from the exact value, so roots refined by Newton may differ from the
   console in the last bits.
-- Of the items, only Fox's, Mario's and Link's have an attribute translator. An item belonging to
-  another character, or a stage item created from `itemdata`, stops with "OS panic" at
-  `item.c:576` as soon as it comes out, and the process ends with it, in `--play` too.
+- All 27 `ftData*` translators carry their character's own item attribute table. What is
+  still left out are the per-type special attributes and dynamics of the items that come from
+  `itPublicData` — the common items, the Pokémon — and of the stage items created from
+  `itemdata`. Such an item stops with "OS panic" at `item.c:576` as soon as it comes out, and
+  the process ends with it, in `--play` too.

@@ -1,5 +1,9 @@
 # Native port MVP progress
 
+> **Closed milestone.** The MVP reached 100% on 16 September 2026 and this document is
+> no longer updated. Ongoing progress is tracked in
+> [project-progress.md](project-progress.md), which covers the whole project through 1.0.
+
 ## MVP definition
 
 A complete local flow: start the executable, navigate from the title to VS, pick two players

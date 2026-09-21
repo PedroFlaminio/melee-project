@@ -62,8 +62,10 @@ and compare the result, and are the model to follow.
   ("Implement indirect texture support in SDL GL renderer").
 - Say in the body what was measured, not just what was written — the status documents are
   built from measured results.
-- Update `docs/native_port_status.md` and `docs/port-mvp-progress.md` when a change moves
-  the port forward; those two documents are how work is handed over between sessions.
+- Update `docs/project-progress.md` when a change moves the port forward — it is the
+  running progress document — and `docs/native_port_status.md` when the change adds a
+  capability or removes a limitation. Those two are how work is handed over between sessions.
+  `docs/port-mvp-progress.md` is closed and should not be updated.
 
 ## Assets
 
