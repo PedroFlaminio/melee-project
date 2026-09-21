@@ -4,13 +4,36 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "ninja",
+      "label": "configure (host-debug)",
       "type": "shell",
-      "command": "ninja",
+      "command": "cmake --preset host-debug",
+      "problemMatcher": []
+    },
+    {
+      "label": "build (host-debug)",
+      "type": "shell",
+      "command": "cmake --build --preset host-debug",
       "group": {
         "kind": "build",
         "isDefault": true
-      }
+      },
+      "problemMatcher": "$gcc"
     },
+    {
+      "label": "test (host-debug)",
+      "type": "shell",
+      "command": "ctest --preset host-debug",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "build (host-release)",
+      "type": "shell",
+      "command": "cmake --build --preset host-release --target melee-pc",
+      "problemMatcher": "$gcc"
+    }
   ]
 }
