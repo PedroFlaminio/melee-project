@@ -640,6 +640,37 @@ DISPLAY=:1 python3 port/tools/play_keyboard_probe.py --no-press
   the trick with `#ifdef MELEE_HOST` and use the variable itself; the console branch does not
   change.
 
+## Stage parameters (`yakumono_param`)
+
+Every `Gr*.dat` carries a public symbol called `yakumono_param`, and each stage declares its
+own struct for it inside its `grXXX.c`. The host cannot tell the layouts apart by name, and
+telling them apart by size is what findings R03–R05 of [`review-fa257ed.md`](review-fa257ed.md)
+removed. The stage's identity comes from `melee_host_stage_current_grkind()`, which reads the
+`stage_info.grkind` that `Ground_801C0754` sets before the archive read that runs the
+translators.
+
+```sh
+python3 port/tools/gen_yakumono_layout.py            # rewrite the generated files
+python3 port/tools/gen_yakumono_layout.py --report   # what parses, and what does not
+python3 port/tools/gen_yakumono_layout.py --check    # what the ctest runs
+```
+
+It parses the structs out of `src/melee/gr` — the `.c`, its headers and `gr/types.h` — and
+writes `port/src/game/yakumono_param.h` and `.c.inc`. Rerun it when a stage's struct changes;
+`melee-host-yakumono-layout-generated` fails when that is due.
+
+- Offsets are computed with the console's layout (four-byte pointers) and cross-checked against
+  the decomp's own `/* 0x.. */` comments, so a struct whose comments disagree is reported
+  rather than generated.
+- Each translator checks the block's extent before reading. A mismatch means the stage's struct
+  moved under the generator, not that the data is unusual — that is what caught Castle and
+  Icicle Mountain.
+- Pointers in these structs are colour-animation scripts handed to `grMaterial_801C9604`, so
+  they go through `melee_host_hsd_reader_command_stream`, the same reader Battlefield's
+  overlays use.
+- A stage that declares `yakumono_param` as `void*` and never reads it, or never mentions it,
+  needs no layout; its bytes are passed through untranslated.
+
 ## Sweeping the stages
 
 Every stage the select screen offers, entered and reported:

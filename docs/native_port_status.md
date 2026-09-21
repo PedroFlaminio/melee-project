@@ -596,15 +596,18 @@ Each translator below unblocked the next step of match entry, in this order:
 - The title's texture cache and the presenter recognize an image by the address of its data and
   its palette. An EFB copy that rewrites the address is re-decoded by the copy's generation, but
   an animation that rewrites an image by some other means keeps showing the first one.
-- **Only 3 of the 30 stages the select screen offers enter a match**: 14 Hyrule Temple,
-  23 Poke Floats and 31 Battlefield. Measured 21 September 2026 with
-  `port/tools/sweep_stages.py`. The other 27 abort on `yakumono_param`, 17 with "no
-  stage-specific verified layout" and 9 with "contains an unsupported relocated object"; the
-  random square resolves to one of them. `game_data_translators.c:3655` turns the refusal into
-  an `OSPanic`, so picking such a stage ends the process. `ground.c`'s `stage_datas` table
-  links every stage, and the host's file API translates `grGroundParam`, `coll_data`,
-  `map_head` (69 of 71), `map_plit`, `quake_model_set`, `itemdata` and `ALDYakuAll`; of
-  `yakumono_param` only the zeroed block 29 files keep, Hyrule Temple among them. The other 47 have parameters of their own, with the
+- **15 of the 30 stages the select screen offers enter a match**, measured 21 September 2026
+  with `port/tools/sweep_stages.py`; the list is in
+  [`project-progress.md`](project-progress.md). `yakumono_param` now has a per-stage layout,
+  generated from each `grXXX.c`'s struct and selected by the loading stage's GrKind. Of the
+  rest: Castle and Icicle Mountain have a wrong generated layout, which their extent check
+  catches; Fountain of Dreams and Pokemon Stadium stop at `image_desc`, which has no
+  translator; ten crash further into stage setup. The select screen refuses a square the host
+  has not been measured to enter (`melee_host_stage_is_playable`), and
+  `melee_host_stage_symbols_check` still raises an `OSPanic` as the backstop, because nothing
+  in the engine can unwind a half-built stage. `ground.c`'s `stage_datas` links every stage,
+  and the file API translates `grGroundParam`, `coll_data`, `map_head` (69 of 71), `map_plit`,
+  `quake_model_set`, `itemdata` and `ALDYakuAll`. The other 47 have parameters of their own, with the
   layout of the struct each `grXXX.c` declares (floats, ints, pairs of u16 in one word and
   pointers), and stop by name: without the field widths, a block of bytes from the disc does not
   become host values. Stage items created from `itemdata` stop by name where the item needs its

@@ -14,24 +14,23 @@ content.
 
 ## Current estimate — 21 September 2026
 
-**Overall: 42% (confidence range: 32–52%).**
+**Overall: 45% (confidence range: 35–55%).**
 
-Revised down from 45% on 21 September, after the stage sweep found that only 3 of the 30
-stages actually load (see *Known issues*). Nothing regressed; the estimate had leaned on
-translator counts, and measuring what a player can actually reach showed content coverage was
-worse than those counts implied. This is the value of the measurement, not a setback.
+Moved twice on 21 September: down to 42% when the stage sweep found only 3 of 30 stages
+loading, then back to 45% once the per-stage `yakumono_param` layouts took that to 15. The
+first move was better measurement, not a regression; the second is real work.
 
 The range is wide because one area dominates the remaining work and is the least measured:
-game modes. The 52% end assumes the modes beyond VS mostly reuse the engine that already runs;
-the 32% end assumes each one brings its own data, scenes and blockers, the way VS did.
+game modes. The 55% end assumes the modes beyond VS mostly reuse the engine that already runs;
+the 35% end assumes each one brings its own data, scenes and blockers, the way VS did.
 
 Percentages below are per-area completeness against the 1.0 definition, not against the MVP.
 An area at 100% in the MVP table can sit well below that here.
 
 | Area | Weight | Done | Where it stands |
 | --- | ---: | ---: | --- |
-| Game modes and content | 25% | 12% | 3 of the 45 modes in `gm/forward.h` are in the host table: `GM_TITLE`, `GM_MENU`, `GM_VS`. VS is complete except the challenger match (its own stage, against a CPU). The engine the other modes reuse — fighters, stages, items, HUD, results, sudden death — already runs, so the next modes should cost less than VS did, but none has been attempted. Content within VS is narrower than the roster suggests: all 26 characters load, but only 3 of 30 stages do. |
-| Assets and data translation | 15% | 45% | 61 translators registered. All 28 `ftData*` are translated, each with its character's item attribute table. Stages: `coll_data` 71/71, `grGroundParam` 71/71, `map_head` 69/71, `map_plit`/`quake_model_set`/`itemdata`/`ALDYakuAll` across the disc. Gaps, in order of impact: `yakumono_param` refuses the 47 files with parameters of their own, which is what keeps 27 of 30 stages from loading at all; the per-type special attributes and dynamics of `itPublicData`'s common items and Pokémon are left out and panic at `item.c:576`; every event level's `x4` parameter is NULL; loose images and palettes have no schema. |
+| Game modes and content | 25% | 15% | 3 of the 45 modes in `gm/forward.h` are in the host table: `GM_TITLE`, `GM_MENU`, `GM_VS`. VS is complete except the challenger match (its own stage, against a CPU). The engine the other modes reuse — fighters, stages, items, HUD, results, sudden death — already runs, so the next modes should cost less than VS did, but none has been attempted. Content within VS: all 26 characters load, and 15 of 30 stages, up from 3 on 21 September. |
+| Assets and data translation | 15% | 55% | 61 translators registered. All 28 `ftData*` are translated, each with its character's item attribute table. Stages: `coll_data` 71/71, `grGroundParam` 71/71, `map_head` 69/71, `map_plit`/`quake_model_set`/`itemdata`/`ALDYakuAll` across the disc. Gaps, in order of impact: `yakumono_param` now has a per-stage layout generated from the game's structs, so 15 of 30 stages load; two have a wrong layout and the rest fail past it; the per-type special attributes and dynamics of `itPublicData`'s common items and Pokémon are left out and panic at `item.c:576`; every event level's `x4` parameter is NULL; loose images and palettes have no schema. |
 | Rendering (GX) | 15% | 75% | A sweep of 725 joint symbols gives 100.0% of 3,379,817 triangles with the TEV fully evaluated, zero display list errors and zero rejected indices. Fog, bump (`GX_TG_BUMPn`), depth textures and indirect TEV are in the presenter; EFB copies rasterize on the CPU in I4 and in colour. Gaps: mipmaps (minification uses the magnification filter), fog range adjustment, `GXEnableTexOffsets`, `GXSetTevSwapModeTable`, `GXCopyDisp` materialization, and no visual comparison against a reference for any of it. |
 | Platform layer (OS, memory, time, DVD, input) | 10% | 70% | Heap, arena, alarms, scheduler, virtual DVD, ARAM/ARQ and PAD all run. Gaps: DVD cancellation/streaming/priority, controller remapping, rumble, hotplug during a match, and the resource manager that should consume the extracted manifest. |
 | Audio | 8% | 85% | The AX mixer plays the game's voices, music and effects, with aux buses (reverb and delay), ITD and surround encoded to stereo. Music and one effect match reference decoders at correlation 1.000000. Gaps: no sample-by-sample comparison against the console for reverb, ITD or surround; chorus and high reverb unported (the game does not use them). |
@@ -41,7 +40,7 @@ An area at 100% in the MVP table can sit well below that here.
 | Platform coverage | 4% | 40% | Linux is the development platform. Windows MSVC and macOS Clang build and test in CI, and there are Clang-on-Visual-Studio presets, but the renderer resolves GL 2.0+ through `GL_GLEXT_PROTOTYPES`, which only works on Linux, so the window has not run on either. ARM64 is untouched. |
 | Cutscenes (THP) | 3% | 0% | Not started. THP appears only as a named stop in `unported.c`. |
 
-Weighted total: 42.7%, reported as 42%.
+Weighted total: 45.2%, reported as 45%.
 
 ## What "done" currently rests on
 
@@ -66,8 +65,9 @@ as matching the console, and nothing has been compared against the DOL in Dolphi
   [`port-mvp-progress.md`](port-mvp-progress.md).
 - [x] **A person plays.** Many matches played through the window; the game runs. Reported
   21 September 2026.
-- [ ] **No crashing combination.** Some character and stage combinations still crash in real
-  play. See *Known issues* below; this is the top priority.
+- [ ] **No crashing combination.** 15 of 30 stages load, up from 3; the rest are in
+  *Known issues* and remain the top priority. Character × stage combinations are still
+  untested: each harness varies one dimension only.
 - [ ] **Visual reference parity.** Compare fog, bump, depth textures, indirect TEV and the EFB
   copies against a captured reference, rather than against the port's own CPU rasterizer.
 - [ ] **Saves.** A virtual memory card, which unlocks the rest of the roster and the stages,
@@ -83,41 +83,58 @@ as matching the console, and nothing has been compared against the DOL in Dolphi
 
 ## Known issues
 
-### Only 3 of 30 stages load — `yakumono_param` (top priority)
+### 15 of 30 stages load (was 3)
 
-Reported from real play on 21 September 2026: the game runs and matches play through, but
-picking certain stages crashes it at match start. Swept with
-`port/tools/sweep_stages.py` on 21 September against the `-O2` build: **3 of the 30 stages the
-select screen offers enter a match. The other 27 abort while loading.**
+Reported from real play on 21 September 2026: picking most stages crashed the game at match
+start. Root cause and fix below; measured with `port/tools/sweep_stages.py`.
 
-| Result | Stages |
+| | Stages |
 | --- | --- |
-| Loads | 14 Hyrule Temple, 23 Poke Floats, 31 Battlefield |
-| `yakumono_param has no stage-specific verified layout` | 17 stages: 2 Fountain of Dreams, 3 Pokemon Stadium, 8 Yoshi's Story, 9 Onett, 11 Rainbow Cruise, 12 Jungle Japes, 13 Great Bay, 15 Brinstar Depths, 16 Yoshi's Island, 17 Green Greens, 18 Fourside, 19 Mushroom Kingdom, 20 Mushroom Kingdom II, 24 Big Blue, 27 Flat Zone, 28 Dream Land N64, 29 Yoshi's Island N64 |
-| `yakumono_param contains an unsupported relocated object` | 9 stages: 4 Princess Peach's Castle, 5 Kongo Jungle, 6 Brinstar, 7 Corneria, 10 Mute City, 22 Venom, 25 Icicle Mountain, 30 Kongo Jungle N64, 32 Final Destination |
-| Random square (0) | resolves to one of the above and fails with it |
+| Loads (15) | 7 Corneria, 9 Onett, 12 Jungle Japes, 14 Hyrule Temple, 15 Brinstar Depths, 17 Green Greens, 18 Fourside, 19 Mushroom Kingdom, 23 Poke Floats, 27 Flat Zone, 28 Dream Land N64, 29 Yoshi's Island N64, 30 Kongo Jungle N64, 31 Battlefield, 32 Final Destination |
+| Wrong layout (2) | 4 Princess Peach's Castle, 25 Icicle Mountain — the generated extent check catches both |
+| Stops at another symbol (2) | 2 Fountain of Dreams, 3 Pokemon Stadium — `image_desc`, which has no translator |
+| Crashes deeper in stage setup (10) | 5 Kongo Jungle, 6 Brinstar, 8 Yoshi's Story, 10 Mute City, 11 Rainbow Cruise, 13 Great Bay, 16 Yoshi's Island, 20 Mushroom Kingdom II, 22 Venom, 24 Big Blue |
+| Random square (1) | resolves to one of the above |
 
-It is a single cause. The host refuses `yakumono_param` for the 47 stage files that carry
-parameters of their own, and `game_data_translators.c:3655` turns that refusal into an
-`OSPanic`, which aborts the process:
+**What it was.** Every `Gr*.dat` carries a symbol called `yakumono_param`, and each stage
+declares its own struct for it inside its `grXXX.c`. The host could not tell the layouts apart
+by name, and telling them apart by size is what findings R03–R05 of
+[`review-fa257ed.md`](review-fa257ed.md) removed, because several stages share an extent with
+incompatible fields. So it refused all 47 non-zero blocks, and
+`melee_host_stage_symbols_check` turned each refusal into an `OSPanic`.
 
-```
-host HSD archive: cannot translate yakumono_param: yakumono_param has no stage-specific verified layout
-OS panic at port/src/game/game_data_translators.c:3655: the host cannot load this stage
-```
+**What fixed it.** The stage's identity comes from the game: `Ground_801C0754` sets
+`stage_info.grkind` before `grDatFiles_801C6038` reads the archive, and that read is what runs
+the translators. `port/tools/gen_yakumono_layout.py` parses the structs out of `src/melee/gr`
+and emits one translator per GrKind, selected by that identity. It follows
+`gen_host_command_layout.py`: a generated copy plus a `--check` that the
+`melee-host-yakumono-layout-generated` test runs, so a struct that moves under the generator
+fails the suite instead of corrupting data. Computed offsets are cross-checked against the
+decomp's own `/* 0x.. */` comments, and each translator verifies the block's extent before
+reading it. Four stages need no layout: Hyrule Temple and Poke Floats declare `yakumono_param`
+as `void*` and never read it; Great Bay and Yoshi's Island never mention it.
 
-The refusal is deliberate and correct — it came from findings R03–R05 in
-[`review-fa257ed.md`](review-fa257ed.md), which replaced layout guessing by size with an
-explicit refusal, removing real memory corruption. What was not decided then is what should
-happen to a player who picks such a stage. Two separable pieces of work:
+Reaching the stages then exposed two pointers truncated to 32 bits, both the documented
+"address kept in an `int`" shape:
 
-1. **Translate the layouts** (the real fix): one `yakumono_param` schema per stage, from the
-   struct each `grXXX.c` declares. 47 files. Doing the 9 with relocated objects needs the
-   pointer targets materialized as well, as R03 describes.
-2. **Stop aborting the process** (small, and immediately visible): an untranslatable stage
-   should be refused at the select screen, or fall back the way
-   `Ground_801C06B8` already handles a stage with no data — not take the game down. This is a
-   behaviour decision, not a bug fix, and it would mask case 1 if done alone.
+- `Ground_801C10B8` writes its deferred-callback node as `{void*, HSD_GObj*, HSD_GObjEvent}`
+  and `Ground_801C0FB8` read it back as `{void*, s32, void(*)(s32)}` — the same struct on the
+  console, a truncated GObj and a wrong call signature on the host.
+- `fn_801C82E8`, the `AOBJ_ARG_AV` callback `granime.c` hands to `HSD_ForeachAnim`, took the
+  `HSD_AObj` as an `int`.
+
+**What a player sees now.** The select screen refuses a square the host has not been measured
+to enter, the way it refuses a locked one. `melee_host_stage_is_playable` holds the measured
+list; the `OSPanic` stays as the backstop for data that fails unexpectedly, because there is no
+path in the engine to unwind a half-built stage. A stage asked for another way — a route's
+`FRAME:STAGE`, or a mode that sets `force_stage_id` — still loads and still stops loudly, so
+this hides nothing from the sweep.
+
+**What is left.** No longer one cause. Castle and Icicle Mountain need their layouts corrected
+(R04 already noted Icicle Mountain's offsets are wrong). Fountain of Dreams and Pokemon Stadium
+need an `image_desc` translator. The remaining ten crash further into stage setup and each
+needs its own backtrace; the two fixed above suggest more truncated pointers on paths no stage
+had reached before.
 
 ### Why the suite never saw it
 
@@ -160,6 +177,7 @@ One row per change that moves the port forward. Keep the newest at the top.
 
 | Date | Overall | Change and evidence |
 | --- | ---: | --- |
+| 2026-09-21 | 45% | Stages. `yakumono_param` gets a per-stage layout, generated from each `grXXX.c`'s struct by `port/tools/gen_yakumono_layout.py` and selected by the loading stage's GrKind, with a `--check` test against generator drift. Two truncated 32-bit pointers fixed on the paths that reaching the stages exposed (`Ground_801C0FB8`'s callback node, `granime.c`'s `HSD_ForeachAnim` callback). The select screen refuses a square the host has not been measured to enter. **Stages entering a match: 3 → 15 of 30.** `ctest --preset host-debug` 27/27, 235/235 unit tests. |
 | 2026-09-21 | 42% | Stage sweep. A person reports playing many matches, with crashes on some stages; `port/tools/sweep_stages.py` (new) forces each stage through the game's own `force_stage_id` and finds **3 of 30 stages load** — the other 27 abort on `yakumono_param`, one cause. Added `FRAME:STAGE=KIND` to `--run-modes` and `melee_host_sss_force_stage` to reach stages without the icon layout or a save. `random_cpu_matches.py` had played every match on Hyrule Temple, one of the three that work, which is why 14/14 CPU matches passed the same day. Estimate revised down from 45%: no regression, better measurement. |
 | 2026-09-21 | 45% | Baseline for this document. Repository cleaned of the decomp project: the `upstream` remote, the mwcc/Nix/decomp-toolkit build, the Doxygen site, the PowerPC-only runtime sources and the committed build artifacts are gone, and all documentation is in English. `tools/port_inventory.py` stops counting `Object(Matching, ...)`. Build clean, `ctest --preset host-debug` 26/26. |
 | 2026-09-21 | — | (MVP milestone closed 2026-09-16; its per-change history is in `port-mvp-progress.md`.) |
