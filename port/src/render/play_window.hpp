@@ -16,17 +16,15 @@ namespace melee::render {
     /* Number of interactive rows in the video settings menu. */
     inline constexpr std::uint8_t kVideoMenuRows = 8;
 
-    /* The simulation remains 60 Hz for all rates.  Fixed rates pace
-     * presentation at the selected frequency.  "Unlimited" re-presents
-     * the last simulation frame as fast as the GPU allows (VSync off)
-     * while the simulation still advances at 60 Hz. */
+    /* The simulation remains 60 Hz for all rates.  Presentation is paced at
+     * one of these finite target frequencies; keeping the set finite makes
+     * the reported rate meaningful and avoids an unbounded swap loop. */
     enum class PresentationRate : std::uint16_t {
         Fps60 = 60,
         Fps120 = 120,
         Fps144 = 144,
         Fps165 = 165,
-        Fps240 = 240,
-        Unlimited = 0
+        Fps240 = 240
     };
 
     enum class PresentationAspect : std::uint8_t {
@@ -110,8 +108,6 @@ namespace melee::render {
             return "165 FPS";
         case PresentationRate::Fps240:
             return "240 FPS";
-        case PresentationRate::Unlimited:
-            return "Unlimited";
         }
         return "60 FPS";
     }
@@ -241,15 +237,14 @@ namespace melee::render {
                                                     PresentationRate::Fps120,
                                                     PresentationRate::Fps144,
                                                     PresentationRate::Fps165,
-                                                    PresentationRate::Fps240,
-                                                    PresentationRate::Unlimited };
+                                                    PresentationRate::Fps240 };
             int index = 0;
-            for (int i = 0; i < 6; ++i) {
+            for (int i = 0; i < 5; ++i) {
                 if (values[i] == settings->rate) {
                     index = i;
                 }
             }
-            settings->rate = values[next(index, 6)];
+            settings->rate = values[next(index, 5)];
         } else if (row == 7) {
             settings->show_fps = !settings->show_fps;
         }

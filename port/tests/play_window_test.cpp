@@ -89,7 +89,7 @@ TEST_CASE("video settings only cycle through supported presentation choices")
             "Fullscreen");
     /* Row 6 is rate. */
     melee::render::cycle(&settings, 6, -1);
-    REQUIRE(settings.rate == melee::render::PresentationRate::Unlimited);
+    REQUIRE(settings.rate == melee::render::PresentationRate::Fps240);
     melee::render::cycle(&settings, 6, 1);
     REQUIRE(settings.rate == melee::render::PresentationRate::Fps60);
 }

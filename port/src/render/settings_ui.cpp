@@ -172,13 +172,13 @@ namespace melee::render {
                 const PresentationRate rates[] = {
                     PresentationRate::Fps60,  PresentationRate::Fps120,
                     PresentationRate::Fps144, PresentationRate::Fps165,
-                    PresentationRate::Fps240, PresentationRate::Unlimited
+                    PresentationRate::Fps240
                 };
                 const char* rate_items[] = {
                     "60 FPS",  "120 FPS", "144 FPS",
-                    "165 FPS", "240 FPS", "Unlimited"
+                    "165 FPS", "240 FPS"
                 };
-                for (int i = 0; i < 6; ++i) {
+                for (int i = 0; i < 5; ++i) {
                     if (rates[i] == settings->rate) {
                         rate_idx = i;
                     }

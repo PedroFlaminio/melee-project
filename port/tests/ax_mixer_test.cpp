@@ -17,6 +17,7 @@ int melee_host_test_ax_setters(char* message, std::size_t size);
 int melee_host_test_ax_frame(char* message, std::size_t size);
 int melee_host_test_ax_reverb(char* message, std::size_t size);
 int melee_host_test_ax_aux_return(char* message, std::size_t size);
+int melee_host_test_ax_itd_and_surround(char* message, std::size_t size);
 }
 
 TEST_CASE("the host mixer decodes DSP ADPCM through the voice's end address")
@@ -87,6 +88,17 @@ TEST_CASE("an aux bus returns what a voice sends one frame later")
 {
     char message[256] = {};
     const int passed = melee_host_test_ax_aux_return(message, sizeof(message));
+    if (passed != 1) {
+        std::fprintf(stderr, "%s\n", message);
+    }
+    REQUIRE(passed == 1);
+}
+
+TEST_CASE("AX interaural delay and surround reaches the stereo host output")
+{
+    char message[256] = {};
+    const int passed = melee_host_test_ax_itd_and_surround(message,
+                                                            sizeof(message));
     if (passed != 1) {
         std::fprintf(stderr, "%s\n", message);
     }

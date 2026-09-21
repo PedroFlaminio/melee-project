@@ -5,8 +5,17 @@ endif()
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG master
+    # A branch makes every CMake reconfigure contact GitHub, even when the
+    # dependency was already populated.  Keep builds reproducible and usable
+    # offline by tracking a released, known-good revision instead.  A clean
+    # build still clones this tag normally; updating it is an intentional
+    # source change rather than a side effect of configuring.
+    GIT_TAG v1.92.9b
+    UPDATE_DISCONNECTED TRUE
 )
+# FetchContent otherwise runs `git fetch` on every reconfigure of an existing
+# source directory.  That is neither needed for the pinned tag nor acceptable
+# for an offline build.  Updating it is a deliberate source change.
 FetchContent_GetProperties(imgui)
 if(NOT imgui_POPULATED)
   FetchContent_Populate(imgui)

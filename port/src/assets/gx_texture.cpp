@@ -21,6 +21,9 @@ constexpr std::uint32_t kGxC4 = 8;
 constexpr std::uint32_t kGxC8 = 9;
 constexpr std::uint32_t kGxC14X2 = 10;
 constexpr std::uint32_t kGxCmpr = 14;
+constexpr std::uint32_t kGxZ8 = 0x11;
+constexpr std::uint32_t kGxZ16 = 0x13;
+constexpr std::uint32_t kGxZ24X8 = 0x16;
 constexpr std::uint32_t kGxTlutIa8 = 0;
 constexpr std::uint32_t kGxTlutRgb565 = 1;
 constexpr std::uint32_t kGxTlutRgb5A3 = 2;
@@ -127,14 +130,17 @@ std::size_t gx_texture_data_size(std::uint16_t width, std::uint16_t height,
     case kGxI8:
     case kGxIA4:
     case kGxC8:
+    case kGxZ8:
         return ceil_div(width, 8) * ceil_div(height, 4) * 32;
     case kGxIA8:
     case kGxC14X2:
+    case kGxZ16:
         return ceil_div(width, 4) * ceil_div(height, 4) * 32;
     case kGxRgb5A3:
     case kGxRgb565:
         return ceil_div(width, 4) * ceil_div(height, 4) * 32;
     case kGxRgba8:
+    case kGxZ24X8:
         return ceil_div(width, 4) * ceil_div(height, 4) * 64;
     case kGxCmpr:
         return ceil_div(width, 8) * ceil_div(height, 8) * 32;
@@ -209,6 +215,50 @@ DecodedTexture decode_gx_texture(std::span<const std::byte> data,
     DecodedTexture output{ width, height,
                            std::vector<std::uint8_t>(
                                static_cast<std::size_t>(width) * height * 4) };
+    /* Depth textures use the regular GX tile geometry.  Keep their depth
+     * bytes in RGB: the presenter uses those bytes to reconstruct a 24-bit
+     * fragment depth, while TEV sees their high byte as intensity. */
+    if (format == kGxZ8 || format == kGxZ16 || format == kGxZ24X8) {
+        const std::size_t tile_width = format == kGxZ8 ? 8U : 4U;
+        const std::size_t tile_height = 4U;
+        std::size_t cursor = 0;
+        for (std::size_t tile_y = 0; tile_y < height; tile_y += tile_height) {
+            for (std::size_t tile_x = 0; tile_x < width;
+                 tile_x += tile_width)
+            {
+                for (std::size_t pixel = 0;
+                     pixel < tile_width * tile_height; ++pixel)
+                {
+                    const std::size_t x = tile_x + pixel % tile_width;
+                    const std::size_t y = tile_y + pixel / tile_width;
+                    if (format == kGxZ8) {
+                        const auto value = std::to_integer<std::uint8_t>(
+                            data[cursor + pixel]);
+                        write_rgba(&output, x, y, value, value, value, value);
+                    } else if (format == kGxZ16) {
+                        const std::size_t offset = cursor + pixel * 2;
+                        const auto hi = std::to_integer<std::uint8_t>(
+                            data[offset]);
+                        const auto lo = std::to_integer<std::uint8_t>(
+                            data[offset + 1]);
+                        write_rgba(&output, x, y, hi, lo, hi, hi);
+                    } else {
+                        /* Z24X8 has the same two 32-byte planes as RGBA8:
+                         * X/Z23..16 first, then Z15..8/Z7..0. */
+                        const std::size_t ar = cursor + pixel * 2;
+                        const std::size_t gb = cursor + 32 + pixel * 2;
+                        write_rgba(&output, x, y,
+                                   std::to_integer<std::uint8_t>(data[ar + 1]),
+                                   std::to_integer<std::uint8_t>(data[gb]),
+                                   std::to_integer<std::uint8_t>(data[gb + 1]),
+                                   std::to_integer<std::uint8_t>(data[ar]));
+                    }
+                }
+                cursor += format == kGxZ24X8 ? 64U : 32U;
+            }
+        }
+        return output;
+    }
     std::size_t cursor = 0;
     const std::size_t tile_width =
         (format == kGxRgb565 || format == kGxRgb5A3 || format == kGxRgba8)

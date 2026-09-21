@@ -133,40 +133,12 @@ std::array<bool, kMatrixRows> matrix_loaded{};
  * back yet: the capture derives normals from the position matrix. */
 std::array<std::array<float, 3>, kMatrixRows> normal_matrix_memory{};
 
-/* Indirect texturing, as the GX calls leave it.  It is recorded so the state a
- * draw ran with is known, but tev.cpp and the presenter still evaluate every
- * stage as direct. */
-struct IndirectTexStage {
-    mh_u32 texcoord = static_cast<mh_u32>(GX_TEXCOORD_NULL);
-    mh_u32 texmap = static_cast<mh_u32>(GX_TEXMAP_NULL);
-    mh_u32 scale_s = 0;
-    mh_u32 scale_t = 0;
-};
-struct IndirectTevStage {
-    bool indirect = false;
-    mh_u32 ind_stage = 0;
-    mh_u32 format = 0;
-    mh_u32 bias = 0;
-    mh_u32 matrix = 0;
-    mh_u32 wrap_s = 0;
-    mh_u32 wrap_t = 0;
-    bool add_previous = false;
-    bool unmodified_lod = false;
-    mh_u32 alpha_select = 0;
-};
-struct IndirectMatrix {
-    std::array<std::array<f32, 3>, 2> offset{};
-    s8 scale_exp = 0;
-};
-constexpr std::size_t kIndirectStages = 4;
-constexpr std::size_t kIndirectMatrices = 3;
-struct IndirectState {
-    mh_u32 stage_count = 0;
-    std::array<IndirectTexStage, kIndirectStages> stages{};
-    std::array<IndirectTevStage, kTevStages> tev_stages{};
-    std::array<IndirectMatrix, kIndirectMatrices> matrices{};
-};
-IndirectState indirect_state{};
+/* Indirect texturing, as the GX calls leave it.  It is folded into each
+ * captured draw state, and the presenter uses it to generate the TEV sample
+ * coordinate. */
+constexpr std::size_t kIndirectStages = MELEE_HOST_GX_MAX_INDIRECT_STAGE;
+constexpr std::size_t kIndirectMatrices = MELEE_HOST_GX_MAX_INDIRECT_MATRIX;
+MeleeHostGxIndirectState indirect_state{};
 
 /* Per texture coordinate, whether lines and points take the texture offsets
  * GXEnableTexOffsets turns on.  Recorded only: the presenter does not draw
@@ -305,7 +277,7 @@ void reset_locked()
     }
     /* GXInit leaves every stage direct, no indirect stage and no texture
      * offsets. */
-    indirect_state = IndirectState{};
+    indirect_state = MeleeHostGxIndirectState{};
     texture_offsets.fill(TextureOffsets{});
 
     fog_state = MeleeHostGxFogState{};
@@ -895,7 +867,7 @@ void GXSetIndTexMtx(GXIndTexMtxID mtx_id, f32 offset[2][3], s8 scale_exp)
     if (id < first || id >= first + kIndirectMatrices) {
         return;
     }
-    IndirectMatrix& matrix = indirect_state.matrices[id - first];
+    MeleeHostGxIndirectMatrix& matrix = indirect_state.matrices[id - first];
     for (std::size_t row = 0; row < 2; ++row) {
         for (std::size_t column = 0; column < 3; ++column) {
             matrix.offset[row][column] = offset[row][column];
@@ -916,7 +888,7 @@ void GXSetTevIndirect(GXTevStageID tev_stage, GXIndTexStageID ind_stage,
     if (stage >= kTevStages) {
         return;
     }
-    IndirectTevStage& slot = indirect_state.tev_stages[stage];
+    MeleeHostGxIndirectTevStage& slot = indirect_state.tev_stages[stage];
     slot.indirect = true;
     slot.ind_stage = static_cast<mh_u32>(ind_stage);
     slot.format = static_cast<mh_u32>(format);
@@ -939,7 +911,7 @@ void GXSetTevDirect(GXTevStageID tev_stage)
     if (stage >= kTevStages) {
         return;
     }
-    indirect_state.tev_stages[stage] = IndirectTevStage{};
+    indirect_state.tev_stages[stage] = MeleeHostGxIndirectTevStage{};
 }
 
 void GXSetTexCoordGen2(GXTexCoordID dst_coord, GXTexGenType func,
@@ -1972,6 +1944,16 @@ void melee_host_gx_pixel_state(MeleeHostGxPixelState* output)
     const std::lock_guard<std::mutex> guard(state_mutex);
     ensure_initialized_locked();
     *output = pixel_state;
+}
+
+void melee_host_gx_indirect_state(MeleeHostGxIndirectState* output)
+{
+    if (output == nullptr) {
+        return;
+    }
+    const std::lock_guard<std::mutex> guard(state_mutex);
+    ensure_initialized_locked();
+    *output = indirect_state;
 }
 
 void melee_host_gx_transform_state(MeleeHostGxTransformState* output)

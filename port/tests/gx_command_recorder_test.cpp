@@ -13,6 +13,7 @@ extern "C" {
 #include <dolphin/gx/GXDispList.h>
 #include <dolphin/gx/GXPixel.h>
 #include <dolphin/gx/GXTev.h>
+#include <dolphin/gx/GXBump.h>
 #include <dolphin/gx/GXCull.h>
 #include <dolphin/gx/GXTexture.h>
 #include <dolphin/gx/GXTransform.h>
@@ -804,6 +805,87 @@ TEST_CASE("draws are grouped by the pixel state they ran under")
     REQUIRE(triangle.vertices[0].draw_state == 0);
 }
 
+TEST_CASE("draws retain and distinguish their indirect texture state")
+{
+    melee_host_gx_state_reset();
+    melee_host_gx_reset_command_log();
+
+    const auto draw = []() {
+        GXBegin(GX_TRIANGLES, GX_VTXFMT0, 3);
+        GXPosition3f32(0.0F, 0.0F, 0.0F);
+        GXPosition3f32(1.0F, 0.0F, 0.0F);
+        GXPosition3f32(0.0F, 1.0F, 0.0F);
+        GXEnd();
+    };
+
+    static u8 normal_image[64] ATTRIBUTE_ALIGN(32) = { 0 };
+    static u8 copied_efb[64] ATTRIBUTE_ALIGN(32) = { 0 };
+    GXTexObj normal;
+    GXTexObj copied;
+    GXInitTexObj(&normal, normal_image, 8, 8, GX_TF_I8, GX_REPEAT,
+                 GX_REPEAT, GX_FALSE);
+    GXInitTexObj(&copied, copied_efb, 8, 8, GX_TF_I8, GX_CLAMP, GX_CLAMP,
+                 GX_FALSE);
+    GXLoadTexObj(&normal, GX_TEXMAP0);
+    GXLoadTexObj(&copied, GX_TEXMAP1);
+    GXSetNumTevStages(1);
+    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+
+    f32 matrix[2][3] = {
+        { 0.125F, 0.0F, 0.0F },
+        { 0.0F, 0.125F, 0.0F },
+    };
+    GXSetNumIndStages(1);
+    GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD0, GX_TEXMAP0);
+    GXSetIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
+    GXSetIndTexMtx(GX_ITM_0, matrix, 1);
+    GXSetTevIndirect(GX_TEVSTAGE0, GX_INDTEXSTAGE0, GX_ITF_8, GX_ITB_ST,
+                     GX_ITM_0, GX_ITW_OFF, GX_ITW_OFF, GX_FALSE, GX_FALSE,
+                     GX_ITBA_OFF);
+    draw();
+
+    // The same state is interned, while a direct stage is a distinct draw
+    // state even though all pixel-state fields are unchanged.
+    draw();
+    GXSetTevDirect(GX_TEVSTAGE0);
+    GXSetNumIndStages(0);
+    draw();
+
+    REQUIRE(melee_host_gx_captured_draw_state_count() == 2);
+    MeleeHostGxDrawState refracted{};
+    MeleeHostGxDrawState direct{};
+    REQUIRE(melee_host_gx_captured_draw_state_at(0, &refracted));
+    REQUIRE(melee_host_gx_captured_draw_state_at(1, &direct));
+    REQUIRE(refracted.indirect.stage_count == 1);
+    REQUIRE(refracted.indirect.stages[0].texcoord == GX_TEXCOORD0);
+    REQUIRE(refracted.indirect.stages[0].texmap == GX_TEXMAP0);
+    REQUIRE(refracted.indirect.tev_stages[0].indirect);
+    REQUIRE(refracted.indirect.tev_stages[0].bias == GX_ITB_ST);
+    REQUIRE(std::fabs(refracted.indirect.matrices[0].offset[0][0] - 0.125F) <
+            1.0e-6F);
+    REQUIRE(refracted.indirect.matrices[0].scale_exp == 1);
+    REQUIRE(direct.indirect.stage_count == 0);
+    REQUIRE(!direct.indirect.tev_stages[0].indirect);
+
+    std::array<mh_u32, MELEE_HOST_GX_MAX_TEXMAP> textures{};
+    REQUIRE(melee_host_gx_captured_texture_set_at(0, textures.data()));
+    MeleeHostGxTextureDesc texture{};
+    REQUIRE(melee_host_gx_captured_texture_at(textures[GX_TEXMAP0],
+                                               &texture));
+    REQUIRE(texture.image == normal_image);
+    REQUIRE(melee_host_gx_captured_texture_at(textures[GX_TEXMAP1],
+                                               &texture));
+    REQUIRE(texture.image == copied_efb);
+
+    MeleeHostGxCapturedTriangle triangle{};
+    REQUIRE(melee_host_gx_captured_triangle_at(0, &triangle));
+    REQUIRE(triangle.vertices[0].draw_state == 0);
+    REQUIRE(melee_host_gx_captured_triangle_at(1, &triangle));
+    REQUIRE(triangle.vertices[0].draw_state == 0);
+    REQUIRE(melee_host_gx_captured_triangle_at(2, &triangle));
+    REQUIRE(triangle.vertices[0].draw_state == 1);
+}
+
 TEST_CASE("draws carry the projection, viewport and scissor they ran under")
 {
     melee_host_gx_state_reset();
@@ -997,6 +1079,63 @@ void push_be_f32(std::vector<u8>* out, f32 value)
 }
 
 } // namespace
+
+TEST_CASE("bump texgen projects its selected light onto the tangent basis")
+{
+    melee_host_gx_state_reset();
+    melee_host_gx_reset_command_log();
+
+    GXSetNumTexGens(2);
+    GXSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GXSetTexCoordGen(GX_TEXCOORD1, GX_TG_BUMP0, GX_TG_TEXCOORD0,
+                     GX_IDENTITY);
+    GXLightObj light{};
+    GXInitLightPos(&light, 1.0F, 1.0F, 0.0F);
+    GXLoadLightObjImm(&light, GX_LIGHT0);
+
+    GXClearVtxDesc();
+    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_NBT, GX_DIRECT);
+    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NBT, GX_NRM_NBT, GX_F32, 0);
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+
+    std::vector<u8> list;
+    list.push_back(static_cast<u8>(static_cast<u8>(GX_POINTS) |
+                                   static_cast<u8>(GX_VTXFMT0)));
+    list.push_back(0);
+    list.push_back(1);
+    // Position, normal, tangent, binormal and the base texture coordinate.
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 1.0F);
+    push_be_f32(&list, 1.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 1.0F);
+    push_be_f32(&list, 0.0F);
+    push_be_f32(&list, 0.25F);
+    push_be_f32(&list, 0.5F);
+    GXCallDisplayList(list.data(), static_cast<u32>(list.size()));
+    GXClearVtxDesc();
+
+    MeleeHostGxCapturedVertex vertex{};
+    REQUIRE(melee_host_gx_display_list_error_count() == 0);
+    REQUIRE(melee_host_gx_captured_vertex_at(0, &vertex));
+    const f32 projected_light = 1.0F / std::sqrt(2.0F);
+    REQUIRE(std::fabs(vertex.texgen[0][0] - 0.25F) < 1.0e-5F);
+    REQUIRE(std::fabs(vertex.texgen[0][1] - 0.5F) < 1.0e-5F);
+    REQUIRE(std::fabs(vertex.texgen[1][0] - (0.25F + projected_light)) <
+            1.0e-5F);
+    REQUIRE(std::fabs(vertex.texgen[1][1] - (0.5F + projected_light)) <
+            1.0e-5F);
+    REQUIRE(vertex.texgen[1][2] == 1.0F);
+}
 
 TEST_CASE("texgen carries a coordinate through the post-transform matrix")
 {

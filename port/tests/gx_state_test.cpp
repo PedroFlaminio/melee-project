@@ -16,6 +16,7 @@ MELEE_HOST_TEST_HSD_BEGIN
 #include <dolphin/gx/GXPixel.h>
 #include <dolphin/gx/GXStruct.h>
 #include <dolphin/gx/GXTev.h>
+#include <dolphin/gx/GXBump.h>
 #include <dolphin/gx/GXTexture.h>
 #include <dolphin/gx/GXTransform.h>
 #include <dolphin/vi/vitypes.h>
@@ -218,6 +219,49 @@ TEST_CASE("TEV stage and texgen configuration is recorded per slot")
                           GX_CH_ALPHA);
     GXSetTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE,
                           GX_CH_ALPHA);
+}
+
+TEST_CASE("indirect texture configuration round-trips through host GX state")
+{
+    melee_host_gx_state_reset();
+
+    f32 matrix[2][3] = {
+        { 0.25F, -0.5F, 0.75F },
+        { 1.0F, 0.125F, -0.25F },
+    };
+    GXSetNumIndStages(1);
+    GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD3, GX_TEXMAP2);
+    GXSetIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_4, GX_ITS_8);
+    GXSetIndTexMtx(GX_ITM_1, matrix, -2);
+    GXSetTevIndirect(GX_TEVSTAGE2, GX_INDTEXSTAGE0, GX_ITF_5, GX_ITB_ST,
+                     GX_ITM_1, GX_ITW_64, GX_ITW_16, GX_TRUE, GX_FALSE,
+                     GX_ITBA_U);
+
+    MeleeHostGxIndirectState indirect{};
+    melee_host_gx_indirect_state(&indirect);
+    REQUIRE(indirect.stage_count == 1);
+    REQUIRE(indirect.stages[0].texcoord == GX_TEXCOORD3);
+    REQUIRE(indirect.stages[0].texmap == GX_TEXMAP2);
+    REQUIRE(indirect.stages[0].scale_s == GX_ITS_4);
+    REQUIRE(indirect.stages[0].scale_t == GX_ITS_8);
+    REQUIRE(near(indirect.matrices[1].offset[0][0], 0.25F));
+    REQUIRE(near(indirect.matrices[1].offset[0][1], -0.5F));
+    REQUIRE(near(indirect.matrices[1].offset[1][2], -0.25F));
+    REQUIRE(indirect.matrices[1].scale_exp == -2);
+    REQUIRE(indirect.tev_stages[2].indirect);
+    REQUIRE(indirect.tev_stages[2].ind_stage == GX_INDTEXSTAGE0);
+    REQUIRE(indirect.tev_stages[2].format == GX_ITF_5);
+    REQUIRE(indirect.tev_stages[2].bias == GX_ITB_ST);
+    REQUIRE(indirect.tev_stages[2].matrix == GX_ITM_1);
+    REQUIRE(indirect.tev_stages[2].wrap_s == GX_ITW_64);
+    REQUIRE(indirect.tev_stages[2].wrap_t == GX_ITW_16);
+    REQUIRE(indirect.tev_stages[2].add_previous);
+    REQUIRE(!indirect.tev_stages[2].unmodified_lod);
+    REQUIRE(indirect.tev_stages[2].alpha_select == GX_ITBA_U);
+
+    GXSetTevDirect(GX_TEVSTAGE2);
+    melee_host_gx_indirect_state(&indirect);
+    REQUIRE(!indirect.tev_stages[2].indirect);
 }
 
 TEST_CASE("texture objects survive as 64-bit pointers inside the SDK blob")

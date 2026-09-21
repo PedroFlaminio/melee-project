@@ -1,6 +1,6 @@
 # Status do port nativo
 
-Atualizado em 15 de setembro de 2026.
+Atualizado em 21 de setembro de 2026.
 
 ## Concluido
 
@@ -392,12 +392,16 @@ Atualizado em 15 de setembro de 2026.
   triangulos com o mesmo estado de pixel, programa TEV e conjunto de texturas,
   as sequencias com blend depois das opacas preservando a ordem, e
   `MELEE_HOST_SCREENSHOT=arquivo.bmp` renderiza um quadro fora da tela.
-- [x] Varredura do disco pelo caminho novo: nos 647 simbolos de cena e de joint
-  (690 modelos, 3.400.842 triangulos, zero erro de display list, zero indice
-  recusado), **3.342.083 triangulos (98,3%) tem o TEV avaliado por inteiro**;
-  os 58.759 restantes, em 55 simbolos, amostram uma coordenada de bump. A
-  conformidade rodou nos 678 modelos com geometria: 277.632 casos e **zero
-  divergencia** entre GLSL e referencia.
+- [x] Varredura do disco pelo caminho novo. A medida anterior, nos 647
+  simbolos de cena e de joint (690 modelos, 3.400.842 triangulos), deixava
+  **3.342.083 triangulos (98,3%) com o TEV avaliado por inteiro**; os 58.759
+  restantes, em 55 simbolos, amostravam uma coordenada de bump. Com o bump
+  avaliado, uma varredura de 725 simbolos de joint de todos os `.dat` e `.usd`
+  de `assets-local` da **3.379.817 triangulos, 100,0% com o TEV avaliado por
+  inteiro**, zero com recurso nao modelado, zero erro de display list e zero
+  indice recusado. Os 18 simbolos `_scene_models` ficam de fora porque nenhum
+  dos seus indices de modelo tem joint. A conformidade rodou nos 678 modelos
+  com geometria: 277.632 casos e **zero divergencia** entre GLSL e referencia.
 - [x] Materializacao de animacao. `HSD_AnimJoint`, `HSD_MatAnimJoint`,
   `HSD_ShapeAnimJoint`, `HSD_AObjDesc`, `HSD_FObjDesc`, `HSD_MatAnim`,
   `HSD_TexAnim` com suas tabelas de imagem e de paleta, `HSD_RenderAnim`,
@@ -1085,8 +1089,10 @@ Atualizado em 15 de setembro de 2026.
   - Textura indireta registrada no recorder (`GXSetNumIndStages`,
     `GXSetIndTexOrder`, `GXSetIndTexCoordScale`, `GXSetIndTexMtx`,
     `GXSetTevIndirect` e `GXSetTevDirect`), que `lbrefract.c` usa, e
-    `GXEnableTexOffsets`, que `psdisp.c` usa. O TEV por fragmento e o presenter
-    ainda nao avaliam nenhum dos dois.
+    `GXEnableTexOffsets`, que `psdisp.c` usa. O estado indireto agora e
+    capturado por draw, inclusive matriz e expoente, e o presenter aplica
+    formato, vies, escala, matriz e wrap ao coordenada TEV; `GXEnableTexOffsets`
+    ainda nao e avaliado.
 - [x] Primeiro passo da luta em execucao, medido com `GS_VS` posto na tabela so
   localmente: depois da SSS o modo VS monta o estado da luta,
   `gm_Scene_Vs_OnEnter` passa por `db_Setup` e pela inicializacao da camera e
@@ -2176,7 +2182,10 @@ Atualizado em 15 de setembro de 2026.
   `adpcmLoop`, PCM16 e PCM8, reamostragem linear, envelope por amostra e mix
   L e R com rampa; a voz para depois da ultima amostra. O callback do usuario
   roda depois das vozes, como em `__AXOutNewFrame`. Os barramentos aux
-  (reverb e chorus), o ITD e o surround nao sao tocados. `AXAcquireVoice` so
+  (reverb e chorus) tambem entram no quadro. O ITD usa a linha circular de 32
+  amostras de cada voz e aproxima cada atraso de ouvido do alvo uma amostra por
+  vez; o canal surround e preservado ate a saida, onde a apresentacao estereo o
+  codifica no par Lt/Rt de fase oposta. `AXAcquireVoice` so
   entrega voz com `melee_host_ax_set_voices_enabled(true)`, desligado por
   padrao, porque uma voz abre os caminhos de efeitos e musica que o host ainda
   nao tem. Oito verificacoes em C (`ax_mixer_check.c`, porque `dolphin/ax.h`
@@ -2520,6 +2529,19 @@ Atualizado em 15 de setembro de 2026.
   (`import -window`) mostra Hyrule Temple com os dois Fox, o relogio em
   01:59:27 e o HUD com 0%. O que falta e uma pessoa jogando e dizendo se o
   jogo responde como no console, e o gamepad, que ninguem tocou.
+- [x] Texturas de profundidade no presenter: os formatos tiled `Z8`, `Z16` e
+  `Z24X8` agora sao decodificados para os bytes de profundidade que o shader
+  usa em `GX_ZT_REPLACE`; o TEV continua vendo o byte mais significativo em
+  todos os canais, como o rasterizador de copia da EFB.
+- [x] Caminho de textura indireta para a refracao: o estado de
+  `GXSetTevIndirect` e parte do snapshot de cada draw e o GLSL desloca a
+  coordenada da textura direta pela amostra indireta, com vies ST, matriz
+  `GX_ITM_0`, expoente, escala e wrap. As matrizes sao uniforms, portanto uma
+  animacao nao cria programas GL novos.
+- [x] Coordenadas de bump (`GX_TG_BUMPn`): depois do texgen comum e da
+  transformacao de posicao, o host soma a direcao da luz selecionada projetada
+  em tangente e binormal sobre a coordenada de origem. A entrada NBT real de
+  display list e coberta por teste; o shader TEV recebe a coordenada final.
 
 ## Em andamento
 
@@ -2534,9 +2556,6 @@ Atualizado em 15 de setembro de 2026.
   Titulo, menu, CSS com o menu de regras, SSS, luta e resultados rodam pelo
   codigo do jogo, com a imagem conferida em BMP e som, e uma luta empatada
   passa pela morte subita; falta jogar na janela com entrada real.
-- [ ] Coordenadas de bump (`GX_TG_BUMPn`), os 1,7% de triangulos que o TEV por
-  fragmento ainda nao reproduz: exigem a direcao da luz projetada em tangente e
-  binormal, e hoje a coordenada de origem passa sem perturbacao.
 - [ ] As luzes descritas pela propria cena, que o materializador ainda nao
   traduz.
 
@@ -2550,28 +2569,23 @@ Atualizado em 15 de setembro de 2026.
 
 ## Proximos gates
 
-1. Audio: o ITD (atraso entre ouvidos pelo pan) e o surround, que o mixer
-   registra e nao toca.
-2. Ritmo com apresentacao: sem apresentar, a luta roda a cerca de 200 frames
+1. Ritmo com apresentacao: sem apresentar, a luta roda a cerca de 200 frames
    por segundo no build `-O2`; falta medir o presenter e a janela.
-3. A refracao (`lbrefract.c`), a copia da EFB que resta sem imagem conferida;
-   as copias em cor ja saem do rasterizador da CPU.
-4. Texturas de profundidade no presenter: `GX_ZT_REPLACE` com `Z8` e `Z24X8`,
-   que o apagamento de tela (`HSD_EraseRect`), as SObj e o menu de regras
-   usam.
-5. A janela com entrada real e o ritmo de 60 Hz de relogio de parede.
-6. Conferir no codigo de maquina a lista de variaveis possivelmente nao
+2. Conferir visualmente a refracao (`lbrefract.c`) e sua copia da EFB contra
+   uma referencia; as copias em cor ja saem do rasterizador da CPU.
+3. A janela com entrada real e o ritmo de 60 Hz de relogio de parede.
+4. Conferir no codigo de maquina a lista de variaveis possivelmente nao
    inicializadas e funcoes sem `return` do build `-O2`, a comecar pelas que a
    rota alcanca.
-7. Fechar o que o TEV por fragmento nao cobre: bump. O fog ja entrou, sem
-   comparacao com o console; a curva e a do GX, e a profundidade e o w de
-   clip do fragmento.
-8. Depois da paridade e do ritmo estavel de 60 Hz, separar apresentacao da
+5. Conferir visualmente os materiais de bump contra uma referencia. O fog ja
+   entrou, sem comparacao com o console; a curva e a do GX, e a profundidade
+   e o w de clip do fragmento.
+6. Depois da paridade e do ritmo estavel de 60 Hz, separar apresentacao da
    simulacao e implementar interpolacao visual opcional com limites de 60,
    120, 144, 165 e 240 FPS, sem modo ilimitado. O tick de jogo, os inputs e a
    fisica continuarao em 60 Hz; cortes e estados descontinuos devem manter a
    pose valida, sem extrapolar gameplay.
-9. Criar a sobreposicao de configuracoes aberta por `Esc`, sem substituir os
+7. Criar a sobreposicao de configuracoes aberta por `Esc`, sem substituir os
    menus do jogo, com pagina Video para frequencia, aspecto e upscaling. As
    configuracoes devem persistir, ser navegaveis por teclado/mouse/controle e
    informar tanto a preferencia quanto a taxa efetiva de apresentacao.
@@ -2582,7 +2596,8 @@ Atualizado em 15 de setembro de 2026.
   permanece ignorado pelo Git e nao faz parte de builds ou artefatos publicos.
 - O executavel ainda nao chama `gmMain`.
 - CARD e THP ainda nao estao implementados. O AX do host toca vozes num mixer
-  de software com os barramentos aux, sem ITD nem surround; PAD e DVD
+  de software com os barramentos aux, ITD e surround codificado para a saida
+  estereo; PAD e DVD
   assincrono tem pontes basicas.
 - O estado GX e registrado, nao rasterizado pelo host: a imagem vem do preview
   SDL/OpenGL, que desenha a geometria capturada com o programa TEV de cada draw
@@ -2591,11 +2606,11 @@ Atualizado em 15 de setembro de 2026.
   mas as cenas so sao apresentadas pelos diagnosticos `--view-*`, nao pelo
   laco de frame do jogo.
 - O preview segue culling, profundidade, blend, mascara de cor, as duas alpha
-  compare e o fog, e a cor vem do TEV por fragmento. Ele nao le mipmaps
-  (a minificacao usa o filtro de magnificacao), nao modela TEV indireto nem
-  `GXSetTevSwapModeTable` (usa as tabelas do `GXInit`, e o recorder para com
-  nome se o jogo instalar outra) e chama as funcoes GL 2.0+ por `GL_GLEXT_PROTOTYPES`, o que so
-  resolve no Linux.
+  compare, fog, bump e TEV indireto; a cor vem do TEV por fragmento. Ele nao
+  le mipmaps (a minificacao usa o filtro de magnificacao), ainda nao modela
+  `GXEnableTexOffsets` nem `GXSetTevSwapModeTable` (usa as tabelas do
+  `GXInit`, e o recorder para com nome se o jogo instalar outra) e chama as
+  funcoes GL 2.0+ por `GL_GLEXT_PROTOTYPES`, o que so resolve no Linux.
 - A iluminacao continua por vertice, como no GX; o que e por fragmento e o TEV.
   Um modelo solto e iluminado pelas luzes substitutas, nao pelas do estagio,
   entao a cor de um personagem no preview nao e a de uma luta.
@@ -2691,7 +2706,8 @@ Atualizado em 15 de setembro de 2026.
   e selecionado.
 - O reverb e o delay nao foram comparados com o console amostra a amostra: o
   port de `HandleReverb` segue a assembly, mas nao ha gravacao de referencia.
-  O ITD (atraso entre ouvidos pelo pan) e registrado e nao e tocado, e o chorus
+  O ITD do host foi conferido por sua linha de atraso e transicao de alvo; falta
+  uma captura de hardware para comparacao amostra a amostra com o DSP. O chorus
   e o reverb alto seguem sem port, porque o jogo nao os usa.
 - O modo de som do IPL nao vem de um SRAM: o host comeca em estereo, e o menu
   de som do jogo pode trocar.
@@ -2784,11 +2800,6 @@ Atualizado em 15 de setembro de 2026.
   Os outros sao `1 << 31` em `int` (`ftCo_Guard.c`, `ftCo_Escape.c`,
   `ftCo_Catch.c`, `ftCo_Attack100.c`, `ftCo_Damage.c`, `fighter.c`) e chamadas
   por ponteiro de funcao de outro tipo.
-- O presenter nao modela texturas de profundidade (`GXSetZTexture`), e o
-  decodificador nao conhece `Z8`, `Z16` nem `Z24X8`. O apagamento de tela do
-  titulo desenha seu quad com a profundidade da propria geometria, na metade
-  entre near e far, em vez de limpar para o far; so esconde o que estiver
-  alem dessa metade. As SObj que usam `GX_ZT_REPLACE` tem o mesmo desvio.
 - A janela do `--play` abriu e manteve 60 Hz no titulo. O teclado ja foi
   exercitado por evento de verdade (`play_keyboard_probe.py`: `d` faz o
   lutador correr, `j` faz o jab), mas so nessas duas teclas, e ninguem jogou

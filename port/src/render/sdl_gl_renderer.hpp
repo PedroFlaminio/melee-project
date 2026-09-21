@@ -27,6 +27,9 @@ namespace melee::render {
          * EFB copy the game makes every frame is; the presenter uploads it
          * again. */
         std::uint32_t generation = 0;
+        /* GX texture format.  Depth formats store their original depth bytes
+         * in rgba so the presenter can reconstruct gl_FragDepth. */
+        std::uint32_t gx_format = 0;
     };
 
     /* Images in the order of the captured texture table, which is the space

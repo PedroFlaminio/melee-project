@@ -437,6 +437,9 @@ namespace melee::render {
             GLint fog_color = -1;
             GLint z_texture_op = -1;
             GLint z_texture_bias = -1;
+            GLint texmap_formats = -1;
+            GLint indirect_matrices = -1;
+            GLint indirect_matrix_scales = -1;
         };
 
         /* One linked program per distinct shader source.  The source is
@@ -468,10 +471,11 @@ namespace melee::render {
                 }
             }
 
-            const TevProgram* get(const MeleeHostGxTevState& tev)
+            const TevProgram* get(const MeleeHostGxTevState& tev,
+                                  const MeleeHostGxIndirectState& indirect)
             {
                 std::string source =
-                    melee::gx::tev_fragment_shader_source(tev);
+                    melee::gx::tev_fragment_shader_source(tev, indirect);
                 const auto found = programs_.find(source);
                 if (found != programs_.end()) {
                     return &found->second;
@@ -526,6 +530,12 @@ namespace melee::render {
                     glGetUniformLocation(program.program, "u_z_texture_op");
                 program.z_texture_bias =
                     glGetUniformLocation(program.program, "u_z_texture_bias");
+                program.texmap_formats = glGetUniformLocation(
+                    program.program, "u_texmap_format");
+                program.indirect_matrices = glGetUniformLocation(
+                    program.program, "u_indirect_matrix");
+                program.indirect_matrix_scales = glGetUniformLocation(
+                    program.program, "u_indirect_matrix_scale");
                 glUseProgram(program.program);
                 const GLint samplers =
                     glGetUniformLocation(program.program, "u_texmap");
@@ -548,7 +558,10 @@ namespace melee::render {
 
         void set_program_uniforms(const TevProgram& program, const Mat4& mvp,
                                   const MeleeHostGxTevState& tev,
-                                  const MeleeHostGxDrawState& state)
+                                  const MeleeHostGxDrawState& state,
+                                  const std::array<GLint,
+                                                   MELEE_HOST_GX_MAX_TEXMAP>&
+                                      texture_formats)
         {
             glUseProgram(program.program);
             glUniformMatrix4fv(program.mvp, 1, GL_FALSE, mvp.data());
@@ -582,6 +595,32 @@ namespace melee::render {
                         static_cast<GLint>(state.z_texture_op));
             glUniform1i(program.z_texture_bias,
                         static_cast<GLint>(state.z_texture_bias));
+            glUniform1iv(program.texmap_formats,
+                         static_cast<GLsizei>(texture_formats.size()),
+                         texture_formats.data());
+            std::array<GLfloat, MELEE_HOST_GX_MAX_INDIRECT_MATRIX * 2U * 3U>
+                indirect_matrices{};
+            std::array<GLint, MELEE_HOST_GX_MAX_INDIRECT_MATRIX>
+                indirect_matrix_scales{};
+            for (std::size_t matrix = 0;
+                 matrix < MELEE_HOST_GX_MAX_INDIRECT_MATRIX; ++matrix)
+            {
+                indirect_matrix_scales[matrix] =
+                    state.indirect.matrices[matrix].scale_exp;
+                for (std::size_t row = 0; row < 2; ++row) {
+                    for (std::size_t column = 0; column < 3; ++column) {
+                        indirect_matrices[(matrix * 2U + row) * 3U + column] =
+                            state.indirect.matrices[matrix]
+                                .offset[row][column];
+                    }
+                }
+            }
+            glUniform3fv(program.indirect_matrices,
+                         MELEE_HOST_GX_MAX_INDIRECT_MATRIX * 2,
+                         indirect_matrices.data());
+            glUniform1iv(program.indirect_matrix_scales,
+                         MELEE_HOST_GX_MAX_INDIRECT_MATRIX,
+                         indirect_matrix_scales.data());
         }
 
         /* position, COLOR0A0, COLOR1A1, then eight s/t/q texture coordinates.
@@ -774,6 +813,7 @@ namespace melee::render {
          * box. */
         void draw_run(const DrawRun& run, ProgramCache* programs,
                       const std::vector<GLuint>& textures,
+                      const std::vector<std::uint32_t>& texture_formats,
                       GLuint white_texture, const Mat4& mvp,
                       bool front_face_cw)
         {
@@ -786,14 +826,21 @@ namespace melee::render {
             {
                 return;
             }
-            const TevProgram* const program = programs->get(tev);
+            const TevProgram* const program = programs->get(tev,
+                                                              state.indirect);
             if (program == nullptr) {
                 return;
             }
-            set_program_uniforms(*program, mvp, tev, state);
             std::array<mh_u32, MELEE_HOST_GX_MAX_TEXMAP> set{};
             set.fill(MELEE_HOST_GX_NO_TEXTURE);
             melee_host_gx_captured_texture_set_at(run.texture_set, set.data());
+            std::array<GLint, MELEE_HOST_GX_MAX_TEXMAP> formats{};
+            for (std::size_t map = 0; map < set.size(); ++map) {
+                if (set[map] < texture_formats.size()) {
+                    formats[map] = static_cast<GLint>(texture_formats[set[map]]);
+                }
+            }
+            set_program_uniforms(*program, mvp, tev, state, formats);
             for (std::size_t map = 0; map < set.size(); ++map) {
                 glActiveTexture(static_cast<GLenum>(GL_TEXTURE0 + map));
                 glBindTexture(GL_TEXTURE_2D, set[map] < textures.size()
@@ -817,11 +864,13 @@ namespace melee::render {
          */
         void draw_capture(const Capture& capture, ProgramCache* programs,
                           const std::vector<GLuint>& textures,
+                          const std::vector<std::uint32_t>& texture_formats,
                           GLuint white_texture, const Mat4& mvp,
                           bool front_face_cw)
         {
             for (const DrawRun& run : capture.runs) {
-                draw_run(run, programs, textures, white_texture, mvp,
+                draw_run(run, programs, textures, texture_formats,
+                         white_texture, mvp,
                          front_face_cw);
             }
             restore_draw_defaults();
@@ -1148,9 +1197,12 @@ namespace melee::render {
         const GLuint white_texture = create_texture(
             { 1, 1, 1, 1, { kWhite.begin(), kWhite.end() }, false, false });
         std::vector<GLuint> textures;
+        std::vector<std::uint32_t> texture_formats;
         textures.reserve(texture_images.size());
+        texture_formats.reserve(texture_images.size());
         for (const auto& image : texture_images) {
             textures.push_back(create_texture(image));
+            texture_formats.push_back(image.gx_format);
         }
 
         bool shown = true;
@@ -1193,7 +1245,8 @@ namespace melee::render {
                 glDepthMask(GL_TRUE);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 draw_capture(
-                    capture, &programs, textures, white_texture,
+                    capture, &programs, textures, texture_formats,
+                    white_texture,
                     preview_mvp(framing, width, height, yaw, pitch, zoom),
                     front_face_cw);
             };
@@ -1385,7 +1438,8 @@ namespace melee::render {
                 {
                     continue;
                 }
-                const TevProgram* const program = programs.get(tev);
+                const TevProgram* const program = programs.get(tev,
+                                                                 state.indirect);
                 if (program == nullptr) {
                     message = "TEV program " + std::to_string(tev_id) +
                               " did not compile";
@@ -1405,7 +1459,7 @@ namespace melee::render {
                 probe.fog_color[1] = 80;
                 probe.fog_color[2] = 160;
                 probe.fog_color[3] = 255;
-                set_program_uniforms(*program, identity(), tev, state);
+                set_program_uniforms(*program, identity(), tev, state, {});
 
                 for (std::size_t sample = 0; sample < cases_per_program;
                      ++sample)
@@ -1414,7 +1468,8 @@ namespace melee::render {
                     const MeleeHostGxDrawState& fog_state =
                         probing ? probe : state;
                     if (probing && sample == cases_per_program / 2) {
-                        set_program_uniforms(*program, identity(), tev, probe);
+                        set_program_uniforms(*program, identity(), tev, probe,
+                                             {});
                     }
                     melee::gx::TevFragmentInputs inputs{};
                     inputs.raster[0] = random_rgba();
@@ -1676,7 +1731,10 @@ namespace melee::render {
             static_cast<PresentationFilter>(filter);
         state->video_settings.window_mode =
             static_cast<PresentationWindowMode>(window_mode);
-        state->video_settings.rate = static_cast<PresentationRate>(rate);
+        /* Version 1 stored zero for the removed unlimited option.  Preserve
+         * the rest of that settings file but migrate it to the safe default. */
+        state->video_settings.rate = static_cast<PresentationRate>(
+            rate == 0 ? 60 : rate);
     }
 
     void save_video_settings(const FramePresenter::State& state)
@@ -2104,8 +2162,7 @@ namespace melee::render {
         state->settings_path = video_settings_path();
         load_video_settings(state.get());
         SDL_SetWindowTitle(state->window.window, play_window_title().c_str());
-        /* Set initial swap interval based on whether the rate is unlimited */
-        SDL_GL_SetSwapInterval(state->video_settings.rate == PresentationRate::Unlimited ? 0 : 1);
+        SDL_GL_SetSwapInterval(1);
         int gamepad_count = 0;
         SDL_JoystickID* const gamepad_ids = SDL_GetGamepads(&gamepad_count);
         state->gamepad =
@@ -2173,10 +2230,13 @@ namespace melee::render {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         std::vector<GLuint> textures;
+        std::vector<std::uint32_t> texture_formats;
         textures.reserve(images.size());
+        texture_formats.reserve(images.size());
         for (const TextureImage* const image : images) {
             if (image == nullptr) {
                 textures.push_back(state.white_texture);
+                texture_formats.push_back(0);
                 continue;
             }
             auto found = state.textures.find(image);
@@ -2191,6 +2251,7 @@ namespace melee::render {
                 found->second = { create_texture(*image), image->generation };
             }
             textures.push_back(found->second.first);
+            texture_formats.push_back(image->gx_format);
         }
 
         const Capture capture = read_capture(true);
@@ -2280,8 +2341,8 @@ namespace melee::render {
                 }
             }
 
-            draw_run(run, state.programs.get(), textures, state.white_texture,
-                     melee::gx::clip_matrix(view), true);
+            draw_run(run, state.programs.get(), textures, texture_formats,
+                     state.white_texture, melee::gx::clip_matrix(view), true);
         }
         clear_until(std::numeric_limits<std::size_t>::max());
         restore_draw_defaults();
@@ -2386,12 +2447,6 @@ namespace melee::render {
                             state.video_settings.window_mode) {
                             apply_window_mode(state);
                         }
-                        if (previous_settings.rate != state.video_settings.rate) {
-                            SDL_GL_SetSwapInterval(
-                                state.video_settings.rate ==
-                                        PresentationRate::Unlimited
-                                    ? 0 : 1);
-                        }
                         save_video_settings(state);
                     }
                 }
@@ -2406,44 +2461,36 @@ namespace melee::render {
             }
             next_sim += kSimTickNs;
 
-            if (state.video_settings.rate == PresentationRate::Unlimited) {
-                /* Unlimited: blit as fast as possible until the 60 Hz tick ends. */
-                do {
-                    blit_and_swap();
-                    double fps = 0.0;
-                    if (state.frame_rate.add_frame(SDL_GetTicksNS(), &fps)) {
-                        state.last_fps = fps;
-                    }
-                } while (SDL_GetTicksNS() < next_sim);
-            } else {
-                /* Fixed target rate: pace presentation blits, but still block until 60 Hz tick. */
-                std::uint64_t frame_ns = 1'000'000'000ULL / static_cast<std::uint16_t>(state.video_settings.rate);
-                Uint64& next_blit = state.next_blit_ns;
-                if (next_blit == 0 || now > next_blit + frame_ns) {
-                    next_blit = now;
+            /* Fixed target rate: pace presentation blits, but still block
+             * until the next 60 Hz simulation tick. */
+            const std::uint64_t frame_ns =
+                1'000'000'000ULL /
+                static_cast<std::uint16_t>(state.video_settings.rate);
+            Uint64& next_blit = state.next_blit_ns;
+            if (next_blit == 0 || now > next_blit + frame_ns) {
+                next_blit = now;
+            }
+
+            do {
+                blit_and_swap();
+                double fps = 0.0;
+                if (state.frame_rate.add_frame(SDL_GetTicksNS(), &fps)) {
+                    state.last_fps = fps;
                 }
 
-                do {
-                    blit_and_swap();
-                    double fps = 0.0;
-                    if (state.frame_rate.add_frame(SDL_GetTicksNS(), &fps)) {
-                        state.last_fps = fps;
+                next_blit += frame_ns;
+                const Uint64 current_time = SDL_GetTicksNS();
+                if (next_blit > current_time) {
+                    Uint64 delay = next_blit - current_time;
+                    /* Never delay past the next simulation tick. */
+                    if (current_time + delay > next_sim) {
+                        delay = next_sim > current_time ? next_sim - current_time : 0;
                     }
-
-                    next_blit += frame_ns;
-                    Uint64 current_time = SDL_GetTicksNS();
-                    if (next_blit > current_time) {
-                        Uint64 delay = next_blit - current_time;
-                        // Never delay past the next simulation tick
-                        if (current_time + delay > next_sim) {
-                            delay = next_sim > current_time ? next_sim - current_time : 0;
-                        }
-                        if (delay > 0) {
-                            SDL_DelayPrecise(delay);
-                        }
+                    if (delay > 0) {
+                        SDL_DelayPrecise(delay);
                     }
-                } while (SDL_GetTicksNS() < next_sim);
-            }
+                }
+            } while (SDL_GetTicksNS() < next_sim);
         }
     }
 

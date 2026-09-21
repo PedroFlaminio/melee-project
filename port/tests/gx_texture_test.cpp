@@ -103,6 +103,40 @@ TEST_CASE("GX IA8 decoder preserves intensity and alpha")
     REQUIRE(image.rgba[3] == 25);
 }
 
+TEST_CASE("GX depth decoders preserve tiled depth bytes")
+{
+    std::array<std::byte, 32> z8{};
+    z8[0] = std::byte{ 0x12 };
+    z8[9] = std::byte{ 0xAB };
+    const auto eight = melee::assets::decode_gx_texture(z8, 8, 4, 0x11);
+    REQUIRE(eight.rgba[0] == 0x12);
+    REQUIRE(eight.rgba[3] == 0x12);
+    REQUIRE(eight.rgba[(8U + 1U) * 4U] == 0xAB);
+    REQUIRE(melee::assets::gx_texture_data_size(8, 4, 0x11) == 32);
+
+    std::array<std::byte, 32> z16{};
+    z16[0] = std::byte{ 0x34 };
+    z16[1] = std::byte{ 0x56 };
+    const auto sixteen = melee::assets::decode_gx_texture(z16, 4, 4, 0x13);
+    REQUIRE(sixteen.rgba[0] == 0x34);
+    REQUIRE(sixteen.rgba[1] == 0x56);
+    REQUIRE(sixteen.rgba[2] == 0x34);
+    REQUIRE(melee::assets::gx_texture_data_size(4, 4, 0x13) == 32);
+
+    std::array<std::byte, 64> z24{};
+    z24[0] = std::byte{ 0xEE };
+    z24[1] = std::byte{ 0x78 };
+    z24[32] = std::byte{ 0x9A };
+    z24[33] = std::byte{ 0xBC };
+    const auto twenty_four =
+        melee::assets::decode_gx_texture(z24, 4, 4, 0x16);
+    REQUIRE(twenty_four.rgba[0] == 0x78);
+    REQUIRE(twenty_four.rgba[1] == 0x9A);
+    REQUIRE(twenty_four.rgba[2] == 0xBC);
+    REQUIRE(twenty_four.rgba[3] == 0xEE);
+    REQUIRE(melee::assets::gx_texture_data_size(4, 4, 0x16) == 64);
+}
+
 TEST_CASE("GX CMPR decoder follows the 8 by 8 tiled subblocks")
 {
     std::array<std::byte, 32> data{};

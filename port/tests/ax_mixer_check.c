@@ -24,6 +24,7 @@ int melee_host_test_ax_setters(char* message, size_t size);
 int melee_host_test_ax_frame(char* message, size_t size);
 int melee_host_test_ax_reverb(char* message, size_t size);
 int melee_host_test_ax_aux_return(char* message, size_t size);
+int melee_host_test_ax_itd_and_surround(char* message, size_t size);
 
 #define CHECK(condition)                                                      \
     do {                                                                      \
@@ -234,6 +235,8 @@ int melee_host_test_ax_setters(char* message, size_t size)
     AXSetVoiceAddr(&voice, &pcm);
     CHECK(voice.pb.adpcm.gain == 0x0800);
     CHECK(voice.pb.adpcm.pred_scale == 0);
+    AXSetVoiceItdTarget(&voice, 99, 2);
+    CHECK(voice.pb.itd.targetShiftL == 31 && voice.pb.itd.targetShiftR == 2);
     return 1;
 }
 
@@ -425,6 +428,84 @@ int melee_host_test_ax_aux_return(char* message, size_t size)
     }
     melee_host_ax_set_aux_enabled(true);
     AXRegisterAuxACallback(NULL, NULL);
+    AXFreeVoice(voice);
+    melee_host_ax_set_voices_enabled(false);
+    AXInit();
+    return 1;
+}
+
+/* A short PCM8 voice at the end of ARAM, away from the allocations that the
+ * rest of the test binary uses.  PCM8 makes the delay and phase relationship
+ * easy to read: 1, 2, 3 ... become 256, 512, 768 ... at full gain. */
+static AXVPB* pcm8_test_voice(void)
+{
+    AXPBADDR address;
+    AXPBSRC source;
+    AXPBVE envelope;
+    u8* aram = (u8*) (uintptr_t) melee_host_aram_bytes();
+    const u32 start = melee_host_aram_size() - 0x80U;
+    AXVPB* voice;
+
+    aram[start] = 1;
+    aram[start + 1] = 2;
+    aram[start + 2] = 3;
+    aram[start + 3] = 4;
+    voice = AXAcquireVoice(15, NULL, 0);
+    if (voice == NULL) {
+        return NULL;
+    }
+    memset(&address, 0, sizeof(address));
+    address.format = 25;
+    address.currentAddressHi = (u16) (start >> 16);
+    address.currentAddressLo = (u16) start;
+    address.endAddressHi = (u16) ((start + 3U) >> 16);
+    address.endAddressLo = (u16) (start + 3U);
+    memset(&source, 0, sizeof(source));
+    source.ratioHi = 1;
+    memset(&envelope, 0, sizeof(envelope));
+    envelope.currentVolume = 0x8000;
+    AXSetVoiceAddr(voice, &address);
+    AXSetVoiceSrc(voice, &source);
+    AXSetVoiceVe(voice, &envelope);
+    AXSetVoiceState(voice, 1);
+    return voice;
+}
+
+int melee_host_test_ax_itd_and_surround(char* message, size_t size)
+{
+    AXPBMIX mix;
+    AXVPB* voice;
+    s16 stereo[MELEE_HOST_AX_FRAME_SAMPLES * 2];
+
+    melee_host_ax_set_voices_enabled(true);
+    AXInit();
+    voice = pcm8_test_voice();
+    CHECK(voice != NULL);
+    memset(&mix, 0, sizeof(mix));
+    mix.vL = 0x8000;
+    mix.vR = 0x8000;
+    AXSetVoiceMix(voice, &mix);
+    AXSetVoiceItdOn(voice);
+    AXSetVoiceItdTarget(voice, 2, 0);
+    melee_host_ax_run_frame(stereo);
+    /* Left approaches its two-sample target while right remains immediate. */
+    CHECK(stereo[0] == 0 && stereo[1] == 256);
+    CHECK(stereo[2] == 0 && stereo[3] == 512);
+    CHECK(stereo[4] == 256 && stereo[5] == 768);
+    CHECK(voice->pb.itd.shiftL == 2 && voice->pb.itd.shiftR == 0);
+    AXFreeVoice(voice);
+
+    AXInit();
+    voice = pcm8_test_voice();
+    CHECK(voice != NULL);
+    memset(&mix, 0, sizeof(mix));
+    mix.vS = 0x8000;
+    AXSetVoiceMix(voice, &mix);
+    melee_host_ax_run_frame(stereo);
+    /* Stereo sinks carry the third AX channel in the standard Lt/Rt phase
+     * pair, so a surround-only source remains audible and decodable. */
+    CHECK(stereo[0] == 256 && stereo[1] == -256);
+    CHECK(stereo[2] == 512 && stereo[3] == -512);
     AXFreeVoice(voice);
     melee_host_ax_set_voices_enabled(false);
     AXInit();

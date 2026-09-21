@@ -29,6 +29,14 @@ struct TevFragmentInputs {
 std::array<int, 4> evaluate_tev(const MeleeHostGxTevState& tev,
                                 const TevFragmentInputs& inputs);
 
+/* The normalized s/t displacement an indirect TEV stage applies after its
+ * indirect texture was sampled as 8-bit RGBA.  This is the numeric reference
+ * for the matching GLSL emission; a stage that is direct, disabled or names
+ * an invalid input returns zero. */
+std::array<float, 2> indirect_texture_offset(
+    const MeleeHostGxIndirectState& indirect, std::size_t tev_stage,
+    const std::array<int, 4>& texel);
+
 /* Both alpha comparisons and the logic that combines them, against the alpha
  * the TEV produced.  No reduction: every GXAlphaOp is evaluated as written. */
 bool alpha_test_passes(const MeleeHostGxDrawState& state, int alpha);
@@ -51,11 +59,8 @@ int fog_mix(int component, int fog_component, int weight);
  * with none of these is evaluated exactly, up to texture filtering. */
 enum TevUnmodelled : std::uint32_t {
     kTevUnmodelledNone = 0,
-    /* A stage samples through a GX_TG_BUMPn coordinate, which needs the light
-     * direction projected on tangent and binormal. */
-    kTevUnmodelledBumpTexGen = 1U << 0,
     /* An input selector the hardware does not define. */
-    kTevUnmodelledArgument = 1U << 1,
+    kTevUnmodelledArgument = 1U << 0,
 };
 
 std::uint32_t tev_unmodelled_features(const MeleeHostGxTevState& tev);
@@ -75,11 +80,16 @@ std::string describe_tev_unmodelled(std::uint32_t features);
  *               u_alpha_test ivec4 (comp0, ref0, op, comp1);
  *               u_alpha_ref1 int;
  *               u_fog_type int, u_fog_range vec2 (start, end) and
- *               u_fog_color vec4, which the fragment's own depth reads
+ *               u_fog_color vec4, which the fragment's own depth reads;
+ *               u_texmap_format int[8], used to reconstruct Z8, Z16 and
+ *               Z24X8 depth textures; u_indirect_matrix vec3[6] and
+ *               u_indirect_matrix_scale int[3] for GX indirect matrices
  *   output      frag_color, the final register over 255; fragments failing
  *               the alpha test are discarded. */
 std::string tev_vertex_shader_source();
-std::string tev_fragment_shader_source(const MeleeHostGxTevState& tev);
+std::string tev_fragment_shader_source(
+    const MeleeHostGxTevState& tev,
+    const MeleeHostGxIndirectState& indirect = {});
 
 } // namespace melee::gx
 

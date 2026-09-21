@@ -776,6 +776,7 @@ melee::render::TextureImage decode_captured_texture(mh_u32 id,
     {
         return image;
     }
+    image.gx_format = desc.format;
     try {
         MeleeHostGxTlutDesc tlut{};
         if (desc.color_indexed) melee_host_gx_captured_texture_tlut(id, &tlut);
@@ -1106,9 +1107,10 @@ void present_title_frame(void* user_data)
         return;
     }
     /* lb_800195D0 steps the host before the next alarm samples the pad, which
-     * latches this state for PADRead. */
+     * latches this state for PADRead.  present() has already held this frame
+     * to its 60 Hz simulation deadline, so pacing again here would halve the
+     * title's real-time cadence. */
     static_cast<void>(melee_host_submit_pad_state(view->context, 0, &pad));
-    view->presenter.pace(1'000'000'000ULL / 60ULL);
 }
 
 /* The window presenter is optional; scripted/headless commands below are
@@ -3211,8 +3213,8 @@ int main(int argc, char** argv)
                 }
 #if defined(MELEE_HOST_SDL_RENDERER)
                 if (state->play) {
-                    // PACE REMOVED: We now rely on VSync and the decoupled render loop
-                    // to run the game at the monitor's native refresh rate!
+                    /* present() owns the finite-rate presentation schedule
+                     * and does not return before the next 60 Hz game tick. */
                 }
 #endif
             };

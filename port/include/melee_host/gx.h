@@ -40,6 +40,8 @@ enum {
     MELEE_HOST_GX_MAX_TEVREG = 4,
     MELEE_HOST_GX_MAX_KCOLOR = 4,
     MELEE_HOST_GX_FOG_ADJ_ENTRIES = 10,
+    MELEE_HOST_GX_MAX_INDIRECT_STAGE = 4,
+    MELEE_HOST_GX_MAX_INDIRECT_MATRIX = 3,
 };
 
 enum {
@@ -55,6 +57,41 @@ enum {
 /* MSVC gives an unscoped enum an int underlying type, so UINT32_MAX cannot
  * be an enumerator even though the value is used as a mh_u32 sentinel. */
 #define MELEE_HOST_GX_NO_TEXTURE ((mh_u32) 0xFFFFFFFFU)
+
+/* The indirect-texture state which changes the coordinate sampled by a TEV
+ * stage.  It is part of the captured draw state because `GXSetTevIndirect`
+ * is global mutable GX state, not part of a display-list vertex. */
+typedef struct MeleeHostGxIndirectTexStage {
+    mh_u32 texcoord;
+    mh_u32 texmap;
+    mh_u32 scale_s;
+    mh_u32 scale_t;
+} MeleeHostGxIndirectTexStage;
+
+typedef struct MeleeHostGxIndirectTevStage {
+    bool indirect;
+    mh_u32 ind_stage;
+    mh_u32 format;
+    mh_u32 bias;
+    mh_u32 matrix;
+    mh_u32 wrap_s;
+    mh_u32 wrap_t;
+    bool add_previous;
+    bool unmodified_lod;
+    mh_u32 alpha_select;
+} MeleeHostGxIndirectTevStage;
+
+typedef struct MeleeHostGxIndirectMatrix {
+    mh_f32 offset[2][3];
+    mh_s8 scale_exp;
+} MeleeHostGxIndirectMatrix;
+
+typedef struct MeleeHostGxIndirectState {
+    mh_u32 stage_count;
+    MeleeHostGxIndirectTexStage stages[MELEE_HOST_GX_MAX_INDIRECT_STAGE];
+    MeleeHostGxIndirectTevStage tev_stages[MELEE_HOST_GX_MAX_TEVSTAGE];
+    MeleeHostGxIndirectMatrix matrices[MELEE_HOST_GX_MAX_INDIRECT_MATRIX];
+} MeleeHostGxIndirectState;
 
 /* The pixel state a draw ran under: what GX was told would decide how the
  * triangle reaches the framebuffer.  Kept separate from the full pixel state
@@ -92,6 +129,7 @@ typedef struct MeleeHostGxDrawState {
     mh_f32 fog_near_z;
     mh_f32 fog_far_z;
     mh_u8 fog_color[4];
+    MeleeHostGxIndirectState indirect;
 } MeleeHostGxDrawState;
 
 typedef struct MeleeHostGxCapturedVertex {
@@ -515,6 +553,7 @@ typedef struct MeleeHostGxCopyState {
 
 void melee_host_gx_state_reset(void);
 void melee_host_gx_pixel_state(MeleeHostGxPixelState* output);
+void melee_host_gx_indirect_state(MeleeHostGxIndirectState* output);
 void melee_host_gx_transform_state(MeleeHostGxTransformState* output);
 void melee_host_gx_tev_state(MeleeHostGxTevState* output);
 /* Distinct TEV configurations the captured draws ran under, in first-use
@@ -541,8 +580,8 @@ bool melee_host_gx_captured_texture_tlut(size_t index,
                                          MeleeHostGxTlutDesc* output);
 /* The texture sets the captured draws used, in first-use order: for each
  * texture map, an id into the captured texture table or
- * MELEE_HOST_GX_NO_TEXTURE.  Only maps some TEV stage of the draw samples are
- * filled, so a stale binding on an unused map does not split a set. */
+ * MELEE_HOST_GX_NO_TEXTURE.  Only maps sampled by a direct or indirect TEV
+ * stage are filled, so a stale binding on an unused map does not split a set. */
 size_t melee_host_gx_captured_texture_set_count(void);
 bool melee_host_gx_captured_texture_set_at(
     size_t index, mh_u32 textures[MELEE_HOST_GX_MAX_TEXMAP]);

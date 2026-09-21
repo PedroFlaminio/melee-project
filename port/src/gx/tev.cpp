@@ -14,8 +14,6 @@ constexpr mh_u32 kOpSub = 1;
 constexpr mh_u32 kScaleDivide2 = 3;
 constexpr mh_u32 kBiasAddHalf = 1;
 constexpr mh_u32 kBiasSubHalf = 2;
-constexpr mh_u32 kTexGenBump0 = 2;
-constexpr mh_u32 kTexGenBump7 = 9;
 
 /* The swap tables GXInit installs.  The only GXSetTevSwapModeTable call in the
  * code the host builds installs GXInit's own SWAP0, and the recorder stops by
@@ -90,6 +88,17 @@ int sign_extend_11(int value)
 int left_shift_of(mh_u32 scale)
 {
     return scale == 1 ? 2 : scale == 2 ? 4 : 1;
+}
+
+/* GX_ITF_* names a retained bit width, not an enum shift amount. */
+int indirect_texel_shift(mh_u32 format)
+{
+    switch (format) {
+    case 1: return 3; /* GX_ITF_5 */
+    case 2: return 4; /* GX_ITF_4 */
+    case 3: return 5; /* GX_ITF_3 */
+    default: return 0; /* GX_ITF_8 and an invalid value */
+    }
 }
 
 int combine_regular(int a, int b, int c, int d, mh_u32 op, mh_u32 bias,
@@ -304,6 +313,54 @@ std::array<int, 4> evaluate_tev(const MeleeHostGxTevState& tev,
              reg[0][3] & 255 };
 }
 
+std::array<float, 2> indirect_texture_offset(
+    const MeleeHostGxIndirectState& indirect, std::size_t tev_stage,
+    const std::array<int, 4>& texel)
+{
+    if (tev_stage >= MELEE_HOST_GX_MAX_TEVSTAGE ||
+        !indirect.tev_stages[tev_stage].indirect ||
+        indirect.tev_stages[tev_stage].ind_stage >= indirect.stage_count ||
+        indirect.tev_stages[tev_stage].ind_stage >=
+            MELEE_HOST_GX_MAX_INDIRECT_STAGE) {
+        return {};
+    }
+    const MeleeHostGxIndirectTevStage& config =
+        indirect.tev_stages[tev_stage];
+    const int shift = indirect_texel_shift(config.format);
+    const int center = 128 >> shift;
+    std::array<int, 3> value{ texel[0] >> shift, texel[1] >> shift,
+                              texel[2] >> shift };
+    if (config.bias == 1 || config.bias == 3 || config.bias == 5 ||
+        config.bias == 7) {
+        value[0] -= center;
+    }
+    if (config.bias == 2 || config.bias == 3 || config.bias == 6 ||
+        config.bias == 7) {
+        value[1] -= center;
+    }
+    if (config.bias == 4 || config.bias == 5 || config.bias == 6 ||
+        config.bias == 7) {
+        value[2] -= center;
+    }
+    if (config.matrix < 1 || config.matrix > 3) {
+        return { static_cast<float>(value[0]) / 256.0F,
+                 static_cast<float>(value[1]) / 256.0F };
+    }
+    const MeleeHostGxIndirectMatrix& matrix =
+        indirect.matrices[config.matrix - 1U];
+    const float scale = std::exp2(static_cast<float>(matrix.scale_exp)) /
+                        256.0F;
+    std::array<float, 2> result{};
+    for (std::size_t row = 0; row < result.size(); ++row) {
+        for (std::size_t column = 0; column < value.size(); ++column) {
+            result[row] += matrix.offset[row][column] *
+                           static_cast<float>(value[column]);
+        }
+        result[row] *= scale;
+    }
+    return result;
+}
+
 bool alpha_test_passes(const MeleeHostGxDrawState& state, int alpha)
 {
     const auto compare = [alpha](mh_u32 function, int reference) {
@@ -346,15 +403,6 @@ std::uint32_t tev_unmodelled_features(const MeleeHostGxTevState& tev)
     const std::size_t stages = stage_count(tev);
     for (std::size_t index = 0; index < stages; ++index) {
         const MeleeHostGxTevStage& stage = tev.stages[index];
-        if (texel_source(tev, stage) == TexelSource::Sampled &&
-            stage.texcoord < tev.texcoord_gen_count &&
-            stage.texcoord < MELEE_HOST_GX_MAX_TEXCOORD)
-        {
-            const mh_u32 function = tev.texcoord_gens[stage.texcoord].function;
-            if (function >= kTexGenBump0 && function <= kTexGenBump7) {
-                features |= kTevUnmodelledBumpTexGen;
-            }
-        }
         for (std::size_t input = 0; input < 4; ++input) {
             if (stage.color_input[input] > kColorArgZero ||
                 stage.alpha_input[input] > kAlphaArgZero)
@@ -375,9 +423,6 @@ std::string describe_tev_unmodelled(std::uint32_t features)
         }
         text += name;
     };
-    if ((features & kTevUnmodelledBumpTexGen) != 0) {
-        append("bump texgen");
-    }
     if ((features & kTevUnmodelledArgument) != 0) {
         append("undefined input");
     }
@@ -560,9 +605,45 @@ std::string regular_glsl(const char* type, const char* a, const char* b,
     return code;
 }
 
+bool indirect_stage_active(const MeleeHostGxIndirectState& indirect,
+                           std::size_t tev_stage)
+{
+    return tev_stage < MELEE_HOST_GX_MAX_TEVSTAGE &&
+           indirect.tev_stages[tev_stage].indirect &&
+           indirect.tev_stages[tev_stage].ind_stage < indirect.stage_count &&
+           indirect.tev_stages[tev_stage].ind_stage <
+               MELEE_HOST_GX_MAX_INDIRECT_STAGE;
+}
+
+std::string texgen_glsl(mh_u32 texcoord, const MeleeHostGxTevState& tev)
+{
+    return texcoord < tev.texcoord_gen_count &&
+                   texcoord < MELEE_HOST_GX_MAX_TEXCOORD
+               ? "v_texgen[" + std::to_string(texcoord) + "]"
+               : std::string("vec3(0.0, 0.0, 1.0)");
+}
+
+std::string indirect_wrap_glsl(mh_u32 wrap, const char* coordinate)
+{
+    // GX_ITW_OFF preserves the coordinate; GX_ITW_0 forces it to zero.  The
+    // remaining ids are 256, 128, 64, 32 and 16 texel periods in a normalized
+    // 256-wide texture coordinate.
+    if (wrap == 0) {
+        return coordinate;
+    }
+    if (wrap == 6) {
+        return "0.0";
+    }
+    const int multiplier = 1 << static_cast<int>(wrap - 1U);
+    return "(fract(" + std::string(coordinate) + " * " +
+           std::to_string(multiplier) + ".0) / " +
+           std::to_string(multiplier) + ".0)";
+}
+
 } // namespace
 
-std::string tev_fragment_shader_source(const MeleeHostGxTevState& tev)
+std::string tev_fragment_shader_source(const MeleeHostGxTevState& tev,
+                                       const MeleeHostGxIndirectState& indirect)
 {
     std::string code = R"(#version 330 core
 in vec4 v_color0;
@@ -578,6 +659,9 @@ uniform vec2 u_fog_range;
 uniform ivec4 u_fog_color;
 uniform int u_z_texture_op;
 uniform int u_z_texture_bias;
+uniform int u_texmap_format[8];
+uniform vec3 u_indirect_matrix[6];
+uniform int u_indirect_matrix_scale[3];
 out vec4 frag_color;
 
 /* The same curve as melee::gx::fog_blend, over the fragment's eye-space
@@ -620,10 +704,22 @@ bool gx_compare(int function, int value, int reference)
 ivec3 sign_extend_11(ivec3 value) { return ((value & 2047) ^ 1024) - 1024; }
 int sign_extend_11(int value) { return ((value & 2047) ^ 1024) - 1024; }
 
-ivec4 sample_texmap(int texmap, vec3 coord)
+ivec4 sample_texmap_raw(int texmap, vec3 coord)
 {
     float q = coord.z == 0.0 ? 1.0 : coord.z;
     return ivec4(round(texture(u_texmap[texmap], coord.xy / q) * 255.0));
+}
+
+ivec4 sample_texmap(int texmap, vec3 coord)
+{
+    ivec4 raw = sample_texmap_raw(texmap, coord);
+    /* Z textures provide their most significant depth byte to TEV in every
+     * channel.  The raw bytes remain available for GX_ZT_REPLACE below. */
+    if (u_texmap_format[texmap] == 17 || u_texmap_format[texmap] == 19 ||
+        u_texmap_format[texmap] == 22) {
+        return ivec4(raw.r);
+    }
+    return raw;
 }
 
 void main()
@@ -639,25 +735,90 @@ void main()
 
     const std::size_t stages = stage_count(tev);
     code += "    ivec4 last_texel = ivec4(0);\n";
+    code += "    ivec4 last_texel_raw = ivec4(0);\n";
+    code += "    int last_texmap = -1;\n";
+    code += "    vec2 indirect_previous = vec2(0.0);\n";
     for (std::size_t index = 0; index < stages; ++index) {
         const MeleeHostGxTevStage& stage = tev.stages[index];
         code += "    // stage " + std::to_string(index) + "\n    {\n";
 
         std::string texel;
+        std::string raw_texel = "ivec4(0)";
         switch (texel_source(tev, stage)) {
         case TexelSource::Sampled: {
             /* A coordinate past the generated ones samples at the origin. */
-            const std::string coord =
-                stage.texcoord < tev.texcoord_gen_count &&
-                        stage.texcoord < MELEE_HOST_GX_MAX_TEXCOORD
-                    ? "v_texgen[" + std::to_string(stage.texcoord) + "]"
-                    : std::string("vec3(0.0, 0.0, 1.0)");
+            std::string coord = texgen_glsl(stage.texcoord, tev);
+            if (indirect_stage_active(indirect, index)) {
+                const MeleeHostGxIndirectTevStage& config =
+                    indirect.tev_stages[index];
+                const MeleeHostGxIndirectTexStage& input =
+                    indirect.stages[config.ind_stage];
+                const int shift = indirect_texel_shift(config.format);
+                const int center = 128 >> shift;
+                const mh_u32 scale_s = std::min<mh_u32>(input.scale_s, 8U);
+                const mh_u32 scale_t = std::min<mh_u32>(input.scale_t, 8U);
+                code += "        vec3 direct_coord = " + coord + ";\n";
+                code += "        vec3 indirect_coord = " +
+                        texgen_glsl(input.texcoord, tev) + ";\n";
+                code += "        indirect_coord.xy /= vec2(" +
+                        std::to_string(1U << scale_s) + ".0, " +
+                        std::to_string(1U << scale_t) + ".0);\n";
+                if (input.texmap < MELEE_HOST_GX_MAX_TEXMAP) {
+                    code += "        ivec3 indirect_texel = sample_texmap_raw(" +
+                            std::to_string(input.texmap) +
+                            ", indirect_coord).rgb >> " +
+                            std::to_string(shift) + ";\n";
+                } else {
+                    code += "        ivec3 indirect_texel = ivec3(0);\n";
+                }
+                if (config.bias == 1 || config.bias == 3 || config.bias == 5 ||
+                    config.bias == 7) {
+                    code += "        indirect_texel.r -= " +
+                            std::to_string(center) + ";\n";
+                }
+                if (config.bias == 2 || config.bias == 3 || config.bias == 6 ||
+                    config.bias == 7) {
+                    code += "        indirect_texel.g -= " +
+                            std::to_string(center) + ";\n";
+                }
+                if (config.bias == 4 || config.bias == 5 || config.bias == 6 ||
+                    config.bias == 7) {
+                    code += "        indirect_texel.b -= " +
+                            std::to_string(center) + ";\n";
+                }
+                if (config.matrix >= 1 && config.matrix <= 3) {
+                    const std::size_t matrix = config.matrix - 1U;
+                    code += "        vec2 indirect_offset = vec2(dot(u_indirect_matrix[" +
+                            std::to_string(matrix * 2U) +
+                            "], vec3(indirect_texel)), dot(u_indirect_matrix[" +
+                            std::to_string(matrix * 2U + 1U) +
+                            "], vec3(indirect_texel))) * exp2(float(u_indirect_matrix_scale[" +
+                            std::to_string(matrix) + "])) / 256.0;\n";
+                } else {
+                    code += "        vec2 indirect_offset = vec2(indirect_texel) / 256.0;\n";
+                }
+                code += "        vec2 base_coord = direct_coord.xy / "
+                        "(direct_coord.z == 0.0 ? 1.0 : direct_coord.z);\n";
+                code += "        base_coord = vec2(" +
+                        indirect_wrap_glsl(config.wrap_s, "base_coord.x") +
+                        ", " + indirect_wrap_glsl(config.wrap_t, "base_coord.y") +
+                        ");\n";
+                if (config.add_previous) {
+                    code += "        indirect_offset += indirect_previous;\n";
+                }
+                code += "        indirect_previous = indirect_offset;\n";
+                code += "        vec3 tev_coord = vec3(base_coord + indirect_offset, 1.0);\n";
+                coord = "tev_coord";
+            }
             texel = "sample_texmap(" + std::to_string(stage.texmap) + ", " +
                     coord + ")";
+            raw_texel = "sample_texmap_raw(" +
+                        std::to_string(stage.texmap) + ", " + coord + ")";
             break;
         }
         case TexelSource::White:
             texel = "ivec4(255)";
+            raw_texel = texel;
             break;
         case TexelSource::Zero:
             texel = "ivec4(0)";
@@ -667,9 +828,12 @@ void main()
         const std::string raster =
             channel < 0 ? "ivec4(0)"
                         : "raster" + std::to_string(channel);
+        code += "        ivec4 tex_raw = " + raw_texel + ";\n";
         code += "        ivec4 tex = (" + texel + ")." +
                 kSwapSwizzles[swap_table(stage.texture_swap)] + ";\n";
         code += "        last_texel = tex;\n";
+        code += "        last_texel_raw = tex_raw;\n";
+        code += "        last_texmap = " + std::to_string(stage.texmap) + ";\n";
         code += "        ivec4 ras = (" + raster + ")." +
                 kSwapSwizzles[swap_table(stage.raster_swap)] + ";\n";
         code += "        ivec4 konst = ivec4(" +
@@ -764,9 +928,22 @@ void main()
     frag_color = vec4(final_color) / 255.0;
     /* A shader that writes gl_FragDepth must define it on every path. */
     gl_FragDepth = gl_FragCoord.z;
-    if (u_z_texture_op == 2) { /* GX_ZT_REPLACE */
-        gl_FragDepth = clamp((float(last_texel.r) + float(u_z_texture_bias)) /
-                                 255.0,
+    if (u_z_texture_op == 2 && last_texmap >= 0 &&
+        (u_texmap_format[last_texmap] == 17 ||
+         u_texmap_format[last_texmap] == 19 ||
+         u_texmap_format[last_texmap] == 22)) { /* GX_ZT_REPLACE */
+        /* Depth replacement reads the unswizzled depth texel.  TEV swaps
+         * affect the colour combiner only, not GX_ZT_REPLACE. */
+        int depth = last_texel_raw.r * 65793; /* GX_TF_Z8 */
+        if (u_texmap_format[last_texmap] == 19) { /* GX_TF_Z16 */
+            depth = (last_texel_raw.r << 16) | (last_texel_raw.g << 8) |
+                    last_texel_raw.r;
+        } else if (u_texmap_format[last_texmap] == 22) { /* GX_TF_Z24X8 */
+            depth = (last_texel_raw.r << 16) | (last_texel_raw.g << 8) |
+                    last_texel_raw.b;
+        }
+        gl_FragDepth = clamp(float(min(depth + u_z_texture_bias, 16777215)) /
+                                 16777215.0,
                              0.0, 1.0);
     }
 }

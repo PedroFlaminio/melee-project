@@ -309,7 +309,7 @@ TEST_CASE("the alpha test evaluates both comparisons and their logic")
     REQUIRE(melee::gx::alpha_test_passes(state, 10));
 }
 
-TEST_CASE("a bump coordinate is reported as outside the per-fragment model")
+TEST_CASE("a bump coordinate is evaluated before the per-fragment model")
 {
     MeleeHostGxTevState tev = program(2);
     REQUIRE(melee::gx::tev_unmodelled_features(tev) ==
@@ -319,9 +319,8 @@ TEST_CASE("a bump coordinate is reported as outside the per-fragment model")
     tev.texcoord_gen_count = 2;
     tev.texcoord_gens[1].function = GX_TG_BUMP0;
     tev.stages[1].texcoord = GX_TEXCOORD1;
-    const std::uint32_t features = melee::gx::tev_unmodelled_features(tev);
-    REQUIRE(features == melee::gx::kTevUnmodelledBumpTexGen);
-    REQUIRE(melee::gx::describe_tev_unmodelled(features) == "bump texgen");
+    REQUIRE(melee::gx::tev_unmodelled_features(tev) ==
+            melee::gx::kTevUnmodelledNone);
 
     // A stage that does not sample does not care how the coordinate is made.
     tev.stages[1].texmap = GX_TEXMAP_NULL;
@@ -343,9 +342,154 @@ TEST_CASE("a generated shader depends on the program, not on its constants")
     REQUIRE(source.find("// stage 1") != std::string::npos);
     REQUIRE(source.find("// stage 2") == std::string::npos);
     REQUIRE(source.find("discard") != std::string::npos);
+    REQUIRE(source.find("u_texmap_format") != std::string::npos);
+    REQUIRE(source.find("last_texel_raw") != std::string::npos);
 
     second.stages[1].color_op = GX_TEV_COMP_RGB8_GT;
     REQUIRE(source != melee::gx::tev_fragment_shader_source(second));
+}
+
+TEST_CASE("a generated shader applies the captured indirect texture setup")
+{
+    MeleeHostGxTevState tev = program(1);
+    tev.texcoord_gen_count = 2;
+    tev.stages[0].texcoord = GX_TEXCOORD1;
+    tev.stages[0].texmap = GX_TEXMAP1;
+
+    MeleeHostGxIndirectState indirect{};
+    indirect.stage_count = 1;
+    indirect.stages[0].texcoord = GX_TEXCOORD0;
+    indirect.stages[0].texmap = GX_TEXMAP0;
+    indirect.stages[0].scale_s = GX_ITS_1;
+    indirect.stages[0].scale_t = GX_ITS_1;
+    indirect.tev_stages[0].indirect = true;
+    indirect.tev_stages[0].ind_stage = GX_INDTEXSTAGE0;
+    indirect.tev_stages[0].format = GX_ITF_8;
+    indirect.tev_stages[0].bias = GX_ITB_ST;
+    indirect.tev_stages[0].matrix = GX_ITM_0;
+    indirect.tev_stages[0].wrap_s = GX_ITW_OFF;
+    indirect.tev_stages[0].wrap_t = GX_ITW_OFF;
+
+    const std::string source =
+        melee::gx::tev_fragment_shader_source(tev, indirect);
+    REQUIRE(source.find("u_indirect_matrix[0]") != std::string::npos);
+    REQUIRE(source.find("u_indirect_matrix_scale[0]") !=
+            std::string::npos);
+    REQUIRE(source.find("indirect_texel.r -= 128") != std::string::npos);
+    REQUIRE(source.find("indirect_texel.g -= 128") != std::string::npos);
+    REQUIRE(source.find("vec3 tev_coord") != std::string::npos);
+
+    // Matrix entries are uniforms, so animated refraction offsets reuse the
+    // linked program.  The texture-stage structure remains the cache key.
+    MeleeHostGxIndirectState changed_matrix = indirect;
+    changed_matrix.matrices[0].offset[0][0] = -0.5F;
+    changed_matrix.matrices[0].scale_exp = 1;
+    REQUIRE(source == melee::gx::tev_fragment_shader_source(tev,
+                                                              changed_matrix));
+    changed_matrix.tev_stages[0].wrap_s = GX_ITW_64;
+    REQUIRE(source != melee::gx::tev_fragment_shader_source(tev,
+                                                              changed_matrix));
+}
+
+TEST_CASE("indirect texture offsets match the refraction matrix arithmetic")
+{
+    MeleeHostGxIndirectState indirect{};
+    indirect.stage_count = 1;
+    indirect.tev_stages[0].indirect = true;
+    indirect.tev_stages[0].ind_stage = GX_INDTEXSTAGE0;
+    indirect.tev_stages[0].format = GX_ITF_8;
+    indirect.tev_stages[0].bias = GX_ITB_ST;
+    indirect.tev_stages[0].matrix = GX_ITM_0;
+    indirect.matrices[0].offset[0][0] = -0.5F;
+    indirect.matrices[0].offset[1][1] = -0.5F;
+    indirect.matrices[0].scale_exp = 1;
+
+    // This is lbrefract.c's texture_offset matrix.  A full positive S sample
+    // shifts the copied EFB almost half a normalized texture left; a zero T
+    // sample shifts it half a texture down after the ST bias.
+    const auto offset = melee::gx::indirect_texture_offset(
+        indirect, 0, { 255, 0, 42, 255 });
+    REQUIRE(close(offset[0], -127.0F / 256.0F));
+    REQUIRE(close(offset[1], 0.5F));
+
+    indirect.tev_stages[0].format = GX_ITF_5;
+    indirect.tev_stages[0].bias = GX_ITB_NONE;
+    indirect.tev_stages[0].matrix = GX_ITM_OFF;
+    const auto unscaled = melee::gx::indirect_texture_offset(
+        indirect, 0, { 248, 120, 0, 0 });
+    REQUIRE(close(unscaled[0], 31.0F / 256.0F));
+    REQUIRE(close(unscaled[1], 15.0F / 256.0F));
+    const std::array<float, 2> no_offset{};
+    REQUIRE(melee::gx::indirect_texture_offset(indirect, 1, { 1, 2, 3, 4 })
+            == no_offset);
+}
+
+/* The GL conformance run only compiles the programs a capture happened to
+ * draw, and it needs a context, so it is a diagnostic rather than a test.
+ * Nothing else here reads the emitted GLSL as a language: a truncated
+ * expression still contains every substring the cases above look for, and it
+ * would only fail when a refraction draw reached a real driver.  Balanced
+ * delimiters are the cheap property that catches an unfinished emission. */
+TEST_CASE("every generated shader emits balanced GLSL delimiters")
+{
+    const auto balanced = [](const std::string& source) {
+        int parentheses = 0;
+        int braces = 0;
+        int brackets = 0;
+        for (const char character : source) {
+            parentheses += character == '(';
+            parentheses -= character == ')';
+            braces += character == '{';
+            braces -= character == '}';
+            brackets += character == '[';
+            brackets -= character == ']';
+            if (parentheses < 0 || braces < 0 || brackets < 0) {
+                return false;
+            }
+        }
+        return parentheses == 0 && braces == 0 && brackets == 0;
+    };
+
+    REQUIRE(balanced(melee::gx::tev_vertex_shader_source()));
+
+    MeleeHostGxTevState tev = program(2);
+    tev.texcoord_gen_count = 2;
+    tev.stages[0].texcoord = GX_TEXCOORD1;
+    tev.stages[0].texmap = GX_TEXMAP1;
+    REQUIRE(balanced(melee::gx::tev_fragment_shader_source(tev)));
+
+    /* Every indirect knob that steers a distinct emission branch: the matrix
+     * id picks matrix arithmetic or the raw offset, the format sets the texel
+     * shift, the bias picks which channels are centred, and the wrap ids
+     * select pass-through, a period or a forced zero. */
+    for (const mh_u32 matrix :
+         { (mh_u32) GX_ITM_OFF, (mh_u32) GX_ITM_0, (mh_u32) GX_ITM_1,
+           (mh_u32) GX_ITM_2 }) {
+        for (const mh_u32 format :
+             { (mh_u32) GX_ITF_8, (mh_u32) GX_ITF_5, (mh_u32) GX_ITF_4,
+               (mh_u32) GX_ITF_3 }) {
+            for (mh_u32 bias = GX_ITB_NONE; bias <= GX_ITB_STU; ++bias) {
+                for (mh_u32 wrap = GX_ITW_OFF; wrap <= GX_ITW_0; ++wrap) {
+                    MeleeHostGxIndirectState indirect{};
+                    indirect.stage_count = 1;
+                    indirect.stages[0].texcoord = GX_TEXCOORD0;
+                    indirect.stages[0].texmap = GX_TEXMAP0;
+                    indirect.stages[0].scale_s = GX_ITS_2;
+                    indirect.stages[0].scale_t = GX_ITS_4;
+                    indirect.tev_stages[0].indirect = true;
+                    indirect.tev_stages[0].ind_stage = GX_INDTEXSTAGE0;
+                    indirect.tev_stages[0].format = format;
+                    indirect.tev_stages[0].bias = bias;
+                    indirect.tev_stages[0].matrix = matrix;
+                    indirect.tev_stages[0].wrap_s = wrap;
+                    indirect.tev_stages[0].wrap_t = wrap;
+                    indirect.tev_stages[0].add_previous = wrap % 2 == 0;
+                    REQUIRE(balanced(melee::gx::tev_fragment_shader_source(
+                        tev, indirect)));
+                }
+            }
+        }
+    }
 }
 
 TEST_CASE("fog mixes by the curve its type names over the normalised depth")

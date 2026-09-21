@@ -19,6 +19,12 @@
 static AXVPB ax_voices[AX_MAX_VOICES];
 static bool ax_voice_used[AX_MAX_VOICES];
 static mh_u32 ax_voice_order[AX_MAX_VOICES];
+/* AX gives each voice a 32-sample delay line for interaural time delay
+ * (ITD).  The SDK keeps the address in a 32-bit DSP field; on the host the
+ * owning AXVPB keeps the real pointer and this cursor supplies the one piece
+ * of state that is not part of AXPBITD itself. */
+static AXPBITDBUFFER ax_itd_buffers[AX_MAX_VOICES];
+static mh_u8 ax_itd_cursors[AX_MAX_VOICES];
 static mh_u32 ax_acquisitions;
 static bool ax_ready;
 static bool ax_voices_on;
@@ -61,6 +67,18 @@ static void ax_set_pb_default(AXVPB* p)
     memset(p->pb.update.updNum, 0, sizeof(p->pb.update.updNum));
 }
 
+static mh_u32 ax_voice_slot(const AXVPB* voice)
+{
+    mh_u32 i;
+
+    for (i = 0; i < AX_MAX_VOICES; i++) {
+        if (&ax_voices[i] == voice) {
+            return i;
+        }
+    }
+    return AX_MAX_VOICES;
+}
+
 static void ax_reset_voices(void)
 {
     mh_u32 i;
@@ -68,10 +86,13 @@ static void ax_reset_voices(void)
     memset(ax_voices, 0, sizeof(ax_voices));
     memset(ax_voice_used, 0, sizeof(ax_voice_used));
     memset(ax_voice_order, 0, sizeof(ax_voice_order));
+    memset(ax_itd_buffers, 0, sizeof(ax_itd_buffers));
+    memset(ax_itd_cursors, 0, sizeof(ax_itd_cursors));
     ax_acquisitions = 0;
     for (i = 0; i < AX_MAX_VOICES; i++) {
         /* The synth indexes its sound nodes by a voice's index. */
         ax_voices[i].index = i;
+        ax_voices[i].itdBuffer = &ax_itd_buffers[i];
         ax_set_pb_default(&ax_voices[i]);
     }
     ax_ready = true;
@@ -230,17 +251,24 @@ void AXSetVoiceMix(AXVPB* voice, AXPBMIX* mix)
 
 void AXSetVoiceItdOn(AXVPB* voice)
 {
+    const mh_u32 slot = ax_voice_slot(voice);
+
     voice->pb.itd.flag = 1;
     voice->pb.itd.shiftL = 0;
     voice->pb.itd.shiftR = 0;
     voice->pb.itd.targetShiftL = 0;
     voice->pb.itd.targetShiftR = 0;
+    if (slot != AX_MAX_VOICES) {
+        memset(&ax_itd_buffers[slot], 0, sizeof(ax_itd_buffers[slot]));
+        ax_itd_cursors[slot] = 0;
+    }
 }
 
 void AXSetVoiceItdTarget(AXVPB* voice, u16 lShift, u16 rShift)
 {
-    voice->pb.itd.targetShiftL = lShift;
-    voice->pb.itd.targetShiftR = rShift;
+    /* AX's delay buffer has 32 entries, indexed from zero through 31. */
+    voice->pb.itd.targetShiftL = lShift > 31U ? 31U : lShift;
+    voice->pb.itd.targetShiftR = rShift > 31U ? 31U : rShift;
 }
 
 void AXSetVoiceSrc(AXVPB* voice, AXPBSRC* src)
@@ -422,19 +450,73 @@ static bool ax_decode(AXPB* pb, const mh_u8* aram, mh_u32 aram_size,
  * aux[bus] holds left, right and surround of `count` samples each. */
 static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
                                   mh_u32 aram_size, mh_s32* left,
-                                  mh_s32* right, mh_s32* aux[2],
+                                  mh_s32* right, mh_s32* surround,
+                                  mh_s32* aux[2], AXPBITDBUFFER* itd_buffer,
+                                  mh_u8* itd_cursor,
                                   mh_u32 count);
 
 void melee_host_ax_render_voice(struct _AXPB* pb, const mh_u8* aram,
                                 mh_u32 aram_size, mh_s32* left,
                                 mh_s32* right, mh_u32 count)
 {
-    ax_render_voice_sends(pb, aram, aram_size, left, right, NULL, count);
+    ax_render_voice_sends(pb, aram, aram_size, left, right, NULL, NULL, NULL,
+                          NULL, count);
+}
+
+/* The GameCube's AX DSP lets a voice delay either ear by up to 31 samples.
+ * It moves the current delay one sample at a time towards the target, which
+ * avoids a click when the game's pan changes.  The 32-entry ring is reset by
+ * AXSetVoiceItdOn, exactly when the SDK asks the DSP to copy a new ITD block.
+ */
+static void ax_itd_samples(AXPB* pb, AXPBITDBUFFER* buffer,
+                           mh_u8* cursor, mh_s32 sample, mh_s32* left,
+                           mh_s32* right)
+{
+    mh_u32 shift_left;
+    mh_u32 shift_right;
+    mh_u32 position;
+
+    *left = sample;
+    *right = sample;
+    if (pb->itd.flag == 0 || buffer == NULL || cursor == NULL) {
+        return;
+    }
+    if (pb->itd.shiftL > 31U) {
+        pb->itd.shiftL = 31U;
+    }
+    if (pb->itd.shiftR > 31U) {
+        pb->itd.shiftR = 31U;
+    }
+    if (pb->itd.targetShiftL > 31U) {
+        pb->itd.targetShiftL = 31U;
+    }
+    if (pb->itd.targetShiftR > 31U) {
+        pb->itd.targetShiftR = 31U;
+    }
+    if (pb->itd.shiftL < pb->itd.targetShiftL) {
+        pb->itd.shiftL += 1;
+    } else if (pb->itd.shiftL > pb->itd.targetShiftL) {
+        pb->itd.shiftL -= 1;
+    }
+    if (pb->itd.shiftR < pb->itd.targetShiftR) {
+        pb->itd.shiftR += 1;
+    } else if (pb->itd.shiftR > pb->itd.targetShiftR) {
+        pb->itd.shiftR -= 1;
+    }
+    shift_left = pb->itd.shiftL;
+    shift_right = pb->itd.shiftR;
+    position = *cursor & 31U;
+    buffer->data[position] = (s16) ax_clamp(sample, -32768, 32767);
+    *left = buffer->data[(position - shift_left) & 31U];
+    *right = buffer->data[(position - shift_right) & 31U];
+    *cursor = (mh_u8) ((position + 1U) & 31U);
 }
 
 static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
                                   mh_u32 aram_size, mh_s32* left,
-                                  mh_s32* right, mh_s32* aux[2],
+                                  mh_s32* right, mh_s32* surround,
+                                  mh_s32* aux[2], AXPBITDBUFFER* itd_buffer,
+                                  mh_u8* itd_cursor,
                                   mh_u32 count)
 {
     /* The DSP keeps its resampler's history in last_samples.  The host's
@@ -452,6 +534,7 @@ static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
     const mh_s32 volume_delta = pb->ve.currentDelta;
     mh_s32 mix_left = pb->mix.vL;
     mh_s32 mix_right = pb->mix.vR;
+    mh_s32 mix_surround = pb->mix.vS;
     /* Aux A and B, each left, right and surround, with their ramps. */
     mh_s32 send[2][3] = { { pb->mix.vAuxAL, pb->mix.vAuxAR, pb->mix.vAuxAS },
                           { pb->mix.vAuxBL, pb->mix.vAuxBR,
@@ -484,12 +567,21 @@ static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
         const mh_s32 sample =
             here + (mh_s32) (((mh_s64) (next - here) * fraction) >> 16);
         const mh_s32 played = (mh_s32) (((mh_s64) sample * volume) >> 15);
+        mh_s32 itd_left;
+        mh_s32 itd_right;
+
+        ax_itd_samples(pb, itd_buffer, itd_cursor, played, &itd_left,
+                       &itd_right);
 
         if (left != NULL) {
-            left[n] += (mh_s32) (((mh_s64) played * mix_left) >> 15);
+            left[n] += (mh_s32) (((mh_s64) itd_left * mix_left) >> 15);
         }
         if (right != NULL) {
-            right[n] += (mh_s32) (((mh_s64) played * mix_right) >> 15);
+            right[n] += (mh_s32) (((mh_s64) itd_right * mix_right) >> 15);
+        }
+        if (surround != NULL) {
+            surround[n] +=
+                (mh_s32) (((mh_s64) played * mix_surround) >> 15);
         }
         {
             mh_u32 bus;
@@ -514,6 +606,8 @@ static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
             mix_left = ax_clamp(mix_left + (s16) pb->mix.vDeltaL, 0, 0xFFFF);
             mix_right =
                 ax_clamp(mix_right + (s16) pb->mix.vDeltaR, 0, 0xFFFF);
+            mix_surround =
+                ax_clamp(mix_surround + (s16) pb->mix.vDeltaS, 0, 0xFFFF);
         }
         fraction += ratio;
         while (fraction >= 0x10000U) {
@@ -537,6 +631,7 @@ static void ax_render_voice_sends(AXPB* pb, const mh_u8* aram,
     pb->ve.currentVolume = (u16) volume;
     pb->mix.vL = (u16) mix_left;
     pb->mix.vR = (u16) mix_right;
+    pb->mix.vS = (u16) mix_surround;
     if (sends[0]) {
         pb->mix.vAuxAL = (u16) send[0][0];
         pb->mix.vAuxAR = (u16) send[0][1];
@@ -553,6 +648,7 @@ void melee_host_ax_run_frame(mh_s16* stereo)
 {
     mh_s32 left[MELEE_HOST_AX_FRAME_SAMPLES];
     mh_s32 right[MELEE_HOST_AX_FRAME_SAMPLES];
+    mh_s32 surround[MELEE_HOST_AX_FRAME_SAMPLES];
     mh_s32 send[2][MELEE_HOST_AX_FRAME_SAMPLES * 3];
     mh_s32* sends[2] = { send[0], send[1] };
     const mh_u8* const aram = melee_host_aram_bytes();
@@ -562,11 +658,13 @@ void melee_host_ax_run_frame(mh_s16* stereo)
 
     memset(left, 0, sizeof(left));
     memset(right, 0, sizeof(right));
+    memset(surround, 0, sizeof(surround));
     memset(send, 0, sizeof(send));
     for (i = 0; i < AX_MAX_VOICES; i++) {
         if (ax_voice_used[i] && ax_voices[i].pb.state == 1) {
             ax_render_voice_sends(&ax_voices[i].pb, aram, aram_size, left,
-                                  right, ax_aux_on ? sends : NULL,
+                                  right, surround, ax_aux_on ? sends : NULL,
+                                  &ax_itd_buffers[i], &ax_itd_cursors[i],
                                   MELEE_HOST_AX_FRAME_SAMPLES);
         }
     }
@@ -577,6 +675,8 @@ void melee_host_ax_run_frame(mh_s16* stereo)
             for (i = 0; i < MELEE_HOST_AX_FRAME_SAMPLES; i++) {
                 left[i] += ax_aux_return[bus][i];
                 right[i] += ax_aux_return[bus][MELEE_HOST_AX_FRAME_SAMPLES + i];
+                surround[i] +=
+                    ax_aux_return[bus][MELEE_HOST_AX_FRAME_SAMPLES * 2U + i];
             }
             if (ax_aux_callbacks[bus] != NULL) {
                 struct AX_AUX_DATA data;
@@ -593,8 +693,13 @@ void melee_host_ax_run_frame(mh_s16* stereo)
     }
     if (stereo != NULL) {
         for (i = 0; i < MELEE_HOST_AX_FRAME_SAMPLES; i++) {
-            stereo[i * 2] = (mh_s16) ax_clamp(left[i], -32768, 32767);
-            stereo[i * 2 + 1] = (mh_s16) ax_clamp(right[i], -32768, 32767);
+            /* AX leaves surround in a third buffer.  The host output device
+             * is stereo, so encode it as the usual Dolby Pro Logic Lt/Rt
+             * phase pair: +S on left and -S on right. */
+            stereo[i * 2] =
+                (mh_s16) ax_clamp(left[i] + surround[i], -32768, 32767);
+            stereo[i * 2 + 1] =
+                (mh_s16) ax_clamp(right[i] - surround[i], -32768, 32767);
         }
     }
     if (ax_frame_callback != NULL) {

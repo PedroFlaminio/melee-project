@@ -233,6 +233,46 @@ void submit(MeleeHostGxValueType type, mh_u32 bits)
 bool same_draw_state(const MeleeHostGxDrawState& left,
                      const MeleeHostGxDrawState& right)
 {
+    const auto same_indirect = [](const MeleeHostGxIndirectState& a,
+                                  const MeleeHostGxIndirectState& b) {
+        if (a.stage_count != b.stage_count) {
+            return false;
+        }
+        for (std::size_t i = 0; i < MELEE_HOST_GX_MAX_INDIRECT_STAGE; ++i) {
+            if (a.stages[i].texcoord != b.stages[i].texcoord ||
+                a.stages[i].texmap != b.stages[i].texmap ||
+                a.stages[i].scale_s != b.stages[i].scale_s ||
+                a.stages[i].scale_t != b.stages[i].scale_t) {
+                return false;
+            }
+        }
+        for (std::size_t i = 0; i < MELEE_HOST_GX_MAX_TEVSTAGE; ++i) {
+            const auto& x = a.tev_stages[i];
+            const auto& y = b.tev_stages[i];
+            if (x.indirect != y.indirect || x.ind_stage != y.ind_stage ||
+                x.format != y.format || x.bias != y.bias ||
+                x.matrix != y.matrix || x.wrap_s != y.wrap_s ||
+                x.wrap_t != y.wrap_t || x.add_previous != y.add_previous ||
+                x.unmodified_lod != y.unmodified_lod ||
+                x.alpha_select != y.alpha_select) {
+                return false;
+            }
+        }
+        for (std::size_t i = 0; i < MELEE_HOST_GX_MAX_INDIRECT_MATRIX; ++i) {
+            if (a.matrices[i].scale_exp != b.matrices[i].scale_exp) {
+                return false;
+            }
+            for (std::size_t row = 0; row < 2; ++row) {
+                for (std::size_t column = 0; column < 3; ++column) {
+                    if (a.matrices[i].offset[row][column] !=
+                        b.matrices[i].offset[row][column]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    };
     return left.cull_mode == right.cull_mode &&
            left.z_compare_enable == right.z_compare_enable &&
            left.z_update_enable == right.z_update_enable &&
@@ -259,7 +299,8 @@ bool same_draw_state(const MeleeHostGxDrawState& left,
            left.fog_color[0] == right.fog_color[0] &&
            left.fog_color[1] == right.fog_color[1] &&
            left.fog_color[2] == right.fog_color[2] &&
-           left.fog_color[3] == right.fog_color[3];
+           left.fog_color[3] == right.fog_color[3] &&
+           same_indirect(left.indirect, right.indirect);
 }
 
 /* Projects the modelled pixel state onto the fields that decide how a triangle
@@ -273,6 +314,8 @@ mh_u32 current_draw_state_id_locked()
     if (melee_host_gx_fog_enabled()) {
         melee_host_gx_fog_state(&fog);
     }
+    MeleeHostGxIndirectState indirect{};
+    melee_host_gx_indirect_state(&indirect);
     const MeleeHostGxDrawState state{
         pixel.cull_mode,      pixel.z_compare_enable,
         pixel.z_update_enable, pixel.z_func,
@@ -287,6 +330,7 @@ mh_u32 current_draw_state_id_locked()
         fog.end_z,            fog.near_z,
         fog.far_z,
         { fog.color[0], fog.color[1], fog.color[2], fog.color[3] },
+        indirect,
     };
     for (std::size_t index = 0; index < captured_draw_states.size(); ++index) {
         if (same_draw_state(captured_draw_states[index], state)) {
@@ -719,8 +763,9 @@ TexMatrix texgen_matrix(mh_u32 row)
 
 /* GXSetTexCoordGen2 for every vertex of the finished draw.  Matrix texgens
  * read the raw attributes, so they run before the position matrix moves them;
- * SRTG reads the lit colour, so it runs after lighting.  `color_sources`
- * selects which of the two passes this is. */
+ * SRTG reads the lit colour, so it runs after lighting.  Bump texgens are a
+ * third pass below: they need the transformed position and tangent basis.
+ * `color_sources` selects which of these two passes this is. */
 void evaluate_texgen_locked(bool color_sources)
 {
     const MeleeHostGxTevState* const tev = active_tev_locked();
@@ -733,7 +778,6 @@ void evaluate_texgen_locked(bool color_sources)
     constexpr mh_u32 kSrtg = GX_TG_SRTG;
     constexpr mh_u32 kSourceTex0 = GX_TG_TEX0;
     constexpr mh_u32 kSourceTex7 = GX_TG_TEX7;
-    constexpr mh_u32 kSourceTexcoord0 = GX_TG_TEXCOORD0;
     constexpr mh_u32 kSourceColor1 = GX_TG_COLOR1;
     const std::size_t gens =
         tev->texcoord_gen_count < MELEE_HOST_GX_MAX_TEXCOORD
@@ -778,14 +822,8 @@ void evaluate_texgen_locked(bool color_sources)
                 continue;
             }
             if (config.function >= kBump0 && config.function <= kBump7) {
-                /* Not modelled: the source coordinate, unperturbed. */
-                const mh_u32 source = config.source - kSourceTexcoord0;
-                const bool known =
-                    config.source >= kSourceTexcoord0 && source < gen;
-                for (std::size_t axis = 0; axis < 3; ++axis) {
-                    out[axis] = known ? vertex.texgen[source][axis]
-                                      : (axis == 2 ? 1.0F : 0.0F);
-                }
+                /* This pass runs before the position matrix.  The dedicated
+                 * bump pass below must instead see the view-space basis. */
                 continue;
             }
 
@@ -845,6 +883,79 @@ void evaluate_texgen_locked(bool color_sources)
     }
 }
 
+/* GX_TG_BUMPn adds the direction to light n, projected onto the vertex's
+ * tangent plane, to an earlier texture coordinate.  The HSD TObj path makes
+ * the base coordinate immediately before this one and selects the first
+ * diffuse light, so evaluating after the position transform is essential:
+ * light positions, vertices and the tangent basis are then in one space. */
+void evaluate_bump_texgen_locked()
+{
+    const MeleeHostGxTevState* const tev = active_tev_locked();
+    if (tev == nullptr) {
+        return;
+    }
+    constexpr mh_u32 kBump0 = GX_TG_BUMP0;
+    constexpr mh_u32 kBump7 = GX_TG_BUMP7;
+    constexpr mh_u32 kSourceTexcoord0 = GX_TG_TEXCOORD0;
+    constexpr mh_u32 kSourceTexcoord6 = GX_TG_TEXCOORD6;
+    const std::size_t gens =
+        tev->texcoord_gen_count < MELEE_HOST_GX_MAX_TEXCOORD
+            ? tev->texcoord_gen_count
+            : static_cast<std::size_t>(MELEE_HOST_GX_MAX_TEXCOORD);
+
+    for (std::size_t index = active_draw.captured_vertex_start;
+         index < captured_vertices.size(); ++index) {
+        auto& vertex = captured_vertices[index];
+        for (std::size_t gen = 0; gen < gens; ++gen) {
+            const MeleeHostGxTexCoordGen& config = tev->texcoord_gens[gen];
+            if (config.function < kBump0 || config.function > kBump7) {
+                continue;
+            }
+
+            mh_f32* const out = vertex.texgen[gen];
+            const bool has_source =
+                config.source >= kSourceTexcoord0 &&
+                config.source <= kSourceTexcoord6 &&
+                static_cast<std::size_t>(config.source - kSourceTexcoord0) <
+                    gen;
+            if (!has_source) {
+                out[0] = 0.0F;
+                out[1] = 0.0F;
+                out[2] = 1.0F;
+                continue;
+            }
+
+            const mh_u32 source = config.source - kSourceTexcoord0;
+            out[0] = vertex.texgen[source][0];
+            out[1] = vertex.texgen[source][1];
+            out[2] = vertex.texgen[source][2];
+
+            MeleeHostGxLightDesc light{};
+            const mh_u32 light_index = config.function - kBump0;
+            if (!melee_host_gx_light(light_index, &light)) {
+                continue;
+            }
+            mh_f32 light_x = light.position[0] - vertex.position.x;
+            mh_f32 light_y = light.position[1] - vertex.position.y;
+            mh_f32 light_z = light.position[2] - vertex.position.z;
+            const mh_f32 length = std::sqrt(light_x * light_x +
+                                             light_y * light_y +
+                                             light_z * light_z);
+            if (length == 0.0F) {
+                continue;
+            }
+            light_x /= length;
+            light_y /= length;
+            light_z /= length;
+            out[0] += light_x * vertex.tangent.x + light_y * vertex.tangent.y +
+                      light_z * vertex.tangent.z;
+            out[1] += light_x * vertex.binormal.x +
+                      light_y * vertex.binormal.y +
+                      light_z * vertex.binormal.z;
+        }
+    }
+}
+
 mh_u32 texture_set_id_locked(const TextureSet& set)
 {
     for (std::size_t index = 0; index < captured_texture_sets.size(); ++index) {
@@ -856,11 +967,18 @@ mh_u32 texture_set_id_locked(const TextureSet& set)
     return static_cast<mh_u32>(captured_texture_sets.size() - 1);
 }
 
-/* The texture every sampled map held when the draw began. */
+/* The texture every direct or indirect sampled map held when the draw began. */
 mh_u32 current_texture_set_id_locked()
 {
     TextureSet set{};
     set.fill(MELEE_HOST_GX_NO_TEXTURE);
+    const auto capture_map = [&set](mh_u32 texmap) {
+        if (texmap < MELEE_HOST_GX_MAX_TEXMAP &&
+            set[texmap] == MELEE_HOST_GX_NO_TEXTURE)
+        {
+            set[texmap] = current_texture_id_locked(texmap);
+        }
+    };
     if (const MeleeHostGxTevState* const tev = active_tev_locked()) {
         const std::size_t stages =
             tev->stage_count == 0 ? 1U
@@ -868,12 +986,23 @@ mh_u32 current_texture_set_id_locked()
                 ? tev->stage_count
                 : static_cast<std::size_t>(MELEE_HOST_GX_MAX_TEVSTAGE);
         for (std::size_t stage = 0; stage < stages; ++stage) {
-            const mh_u32 texmap = tev->stages[stage].texmap;
-            if (texmap < MELEE_HOST_GX_MAX_TEXMAP &&
-                set[texmap] == MELEE_HOST_GX_NO_TEXTURE)
+            capture_map(tev->stages[stage].texmap);
+        }
+
+        /* The map an indirect stage samples never appears in GXSetTevOrder.
+         * Without it, lbrefract's normal map would bind the presenter's white
+         * fallback texture while its EFB copy is correctly bound on map 1. */
+        MeleeHostGxIndirectState indirect{};
+        melee_host_gx_indirect_state(&indirect);
+        for (std::size_t stage = 0; stage < stages; ++stage) {
+            const MeleeHostGxIndirectTevStage& config =
+                indirect.tev_stages[stage];
+            if (!config.indirect || config.ind_stage >= indirect.stage_count ||
+                config.ind_stage >= MELEE_HOST_GX_MAX_INDIRECT_STAGE)
             {
-                set[texmap] = current_texture_id_locked(texmap);
+                continue;
             }
+            capture_map(indirect.stages[config.ind_stage].texmap);
         }
     }
     return texture_set_id_locked(set);
@@ -884,6 +1013,7 @@ void finish_draw_locked()
 {
     evaluate_texgen_locked(false);
     transform_captured_draw_locked();
+    evaluate_bump_texgen_locked();
     evaluate_captured_draw_locked();
     evaluate_texgen_locked(true);
     active_draw.active = false;
