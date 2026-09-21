@@ -452,6 +452,18 @@ void Ground_801C06B8(GrKind arg0)
     }
 }
 
+#ifdef MELEE_HOST
+/* The stage whose file is being read.  Ground_801C0754 sets stage_info.grkind
+ * before grDatFiles_801C6038 loads the archive, and the archive load is what
+ * runs the host's translators, so a translator can ask which stage its bytes
+ * belong to.  yakumono_param needs that: every Gr*.dat calls the symbol the
+ * same name, and each stage declares its own struct for it. */
+int melee_host_stage_current_grkind(void)
+{
+    return (int) stage_info.grkind;
+}
+#endif
+
 void Ground_801C0754(StageIdPair* pair)
 {
     StageData* stage;
@@ -694,11 +706,24 @@ void Ground_OnLoad(StageIdPair* pair)
 
 void Ground_801C0FB8(StageIdPair* pair)
 {
+    /* The same node Ground_801C10B8 builds, which stores a GObj and the event
+     * to run on it.  The console's four-byte pointers make the two spellings
+     * the same struct; on the host an `s32` here truncates the GObj and the
+     * call goes through the wrong signature, so the fields keep the writer's
+     * types. */
+#ifdef MELEE_HOST
+    struct {
+        void* unk0;
+        HSD_GObj* unk4;
+        HSD_GObjEvent unk8;
+    }* cur;
+#else
     struct {
         void* unk0;
         s32 unk4;
         void (*unk8)(s32);
     }* cur;
+#endif
     void* next;
     stage_datas[pair->grkind]->on_start();
     for (cur = stage_info.x6A4; cur != NULL; cur = next) {

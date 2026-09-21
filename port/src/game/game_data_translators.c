@@ -41,6 +41,7 @@
 #include <melee/ft/kinds/ftMario/types.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gmevent.h>
+#include <melee/gr/ground.h>
 #include <melee/gr/types.h>
 #include <melee/it/forward.h>
 #include <melee/it/it_3F14.h>
@@ -1662,14 +1663,24 @@ static void* stage_yaku_scripts(MeleeHostHsdReader* reader, mh_u32 root)
 
 /* yakumono_param: the parameters a stage keeps for itself, read through the
  * struct its own grXXX.c declares.  Every stage has a different one - floats,
- * ints, pairs of u16 packed in a word, and pointers - and a block of disc
- * bytes cannot be turned into host values without knowing those widths, so
- * the host translates only the block that is all zeroes, which is what the
- * stages that keep the symbol without reading it store: Hyrule Temple and 27
- * other archives.  A stage with parameters of its own stops here with its
- * size, and needs that stage's layout written out. */
+ * ints, pairs of u16 packed in a word, and pointers - so the layout is chosen
+ * by the stage the game is loading, never by the block's size: several stages
+ * share an extent with incompatible fields, and picking by size is what
+ * findings R03-R05 of docs/review-fa257ed.md removed.
+ *
+ * Both files below are generated from the game's own structs by
+ * port/tools/gen_yakumono_layout.py; rerun it when a stage's struct changes,
+ * and the melee-host-yakumono-layout-generated test says when that is due. */
 #include "yakumono_param.h"
 #include "yakumono_param.c.inc"
+
+static void* stage_yakumono_param(MeleeHostHsdReader* reader, mh_u32 root)
+{
+    /* Ground_801C0754 sets stage_info.grkind before grDatFiles_801C6038
+     * reads the archive, and that read is what runs this. */
+    return stage_yakumono_param_by_kind(reader, root,
+                                        melee_host_stage_current_grkind());
+}
 
 static void* stage_map_head(MeleeHostHsdReader* reader, mh_u32 root)
 {

@@ -532,6 +532,15 @@ if(MELEE_HOST_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_host_command_layout.py
                     --check
         )
+        # The per-stage yakumono_param layouts are generated from the structs
+        # each grXXX.c declares; this fails when one of those structs moves
+        # and the generated copy has not been rerun.
+        add_test(
+            NAME melee-host-yakumono-layout-generated
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_yakumono_layout.py
+                    --check
+        )
     endif()
     # Local game assets are intentionally untracked.  When available, retain
     # an end-to-end regression for the TLUT material path without making CI

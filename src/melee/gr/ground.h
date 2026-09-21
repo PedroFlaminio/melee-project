@@ -183,4 +183,10 @@
 /* 1C5AEC */ void Ground_801C5AEC(Vec3* v, Vec3*, Vec3*, Vec3*);
 /* 49E6C8 */ extern StageInfo stage_info;
 
+#ifdef MELEE_HOST
+/* Host only: the GrKind of the stage whose archive is being read, for the
+ * translators that need to know which stage their bytes came from. */
+int melee_host_stage_current_grkind(void);
+#endif
+
 #endif
