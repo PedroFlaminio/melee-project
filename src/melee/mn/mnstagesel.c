@@ -11,6 +11,9 @@
 #include <melee/lb/lb_013B.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbaudio_ax.h>
+#ifdef MELEE_HOST
+#include <melee_host/boot.h>
+#endif
 #include <melee/lb/lbdvd.h>
 #include <melee/lb/lblanguage.h>
 #include <melee/lb/types.h>
@@ -141,6 +144,19 @@ skip_randomize:
                        mnStageSel_804D6C98->xB8, mnStageSel_804D6C98->xBC);
     HSD_JObjReqAnimAll(gobj->hsd_obj, 0.0F);
     HSD_JObjAnimAll(gobj->hsd_obj);
+#ifdef MELEE_HOST
+    /* A stage whose data the host cannot translate would stop the process
+     * partway through loading, so the square is refused here instead, the way
+     * a locked one is. */
+    if (mnStageSel_804D6CAE < 0x1E &&
+        !melee_host_stage_is_playable(
+            mnStageSel_803F06D0[mnStageSel_804D6CAE].stkind))
+    {
+        HSD_GObjFree(gobj);
+        lbAudioAx_80024030(3);
+        return;
+    }
+#endif
     mnStageSel_804D6CAF = 1;
     mnStageSel_804D6CA4 = 0x1E;
     sfxForward();

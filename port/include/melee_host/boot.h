@@ -166,6 +166,12 @@ typedef struct MeleeHostGameModeReport {
  * there is one, and is then cleared.  UNSUPPORTED, with nothing run, when the
  * current mode is not in the host's table.  A state whose scene is not in the
  * host's scene table ends the mode, reported in `stopped_at_missing_scene`. */
+/* Whether the host has been measured to enter a match on `stkind`.  The stage
+ * select refuses a square that is not playable instead of letting the player
+ * pick a stage whose data stops the process; a stage asked for another way
+ * still loads, and still stops loudly if its data cannot be translated. */
+bool melee_host_stage_is_playable(int stkind);
+
 MeleeHostStatus melee_host_game_run_current_mode(
     MeleeHostGxFrameSink frame_sink, void* user_data,
     MeleeHostGameModeReport* out_report);

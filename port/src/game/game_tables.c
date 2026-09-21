@@ -252,3 +252,44 @@ void melee_host_game_unlock_all(void)
     gm_8016468C();
     gm_80164F18();
 }
+
+/* Stages the host has been measured to enter.  A stage that is not here still
+ * loads if it is asked for, and still stops loudly if its data cannot be
+ * translated; this only keeps a player from picking one on the select screen
+ * and losing the process to it.
+ *
+ * The list is measured, not asserted: rerun port/tools/sweep_stages.py after
+ * changing stage data and update it from what that reports.  Measured on
+ * 21 September 2026, 15 of the 30 squares. */
+static const mh_u8 melee_host_playable_stkinds[] = {
+    7,  /* Corneria */
+    9,  /* Onett */
+    12, /* Jungle Japes */
+    14, /* Hyrule Temple */
+    15, /* Brinstar Depths */
+    17, /* Green Greens */
+    18, /* Fourside */
+    19, /* Mushroom Kingdom */
+    23, /* Poke Floats */
+    27, /* Flat Zone */
+    28, /* Dream Land N64 */
+    29, /* Yoshi's Island N64 */
+    30, /* Kongo Jungle N64 */
+    31, /* Battlefield */
+    32, /* Final Destination */
+};
+
+bool melee_host_stage_is_playable(int stkind)
+{
+    unsigned i;
+
+    for (i = 0; i < sizeof(melee_host_playable_stkinds) /
+                    sizeof(melee_host_playable_stkinds[0]);
+         i++)
+    {
+        if ((int) melee_host_playable_stkinds[i] == stkind) {
+            return true;
+        }
+    }
+    return false;
+}
