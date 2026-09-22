@@ -143,8 +143,21 @@ typedef struct grZe_BubbleSpawnPos {
     /* 0x1C */ f32 pad_1C[2];
 } grZe_BubbleSpawnPos;
 
-/* 8049F140 */ static Vec3 grZe_8049F140[2];
-/* 8049F158 */ static Vec3 grZe_8049F158[2];
+/* 8049F140 */
+/* 8049F158 */
+#ifdef MELEE_HOST
+/* grZebes_GetBubbleStartX and its neighbours index grZe_8049F140 past its two
+ * entries: on the console 0x8049F158 follows it by exactly two Vec3, so
+ * base[2] and base[3] land in grZe_8049F158.  The host cannot rely on where
+ * the linker puts two separate objects, so they are one array here, with the
+ * second name an alias at the original offset. */
+static Vec3 grZe_bubble_spots[4];
+#define grZe_8049F140 grZe_bubble_spots
+#define grZe_8049F158 (grZe_bubble_spots + 2)
+#else
+static Vec3 grZe_8049F140[2];
+static Vec3 grZe_8049F158[2];
+#endif
 /* 8049F170 */ static grZe_BubbleEntry grZe_8049F170[20];
 
 typedef struct grZe_BubbleScales {

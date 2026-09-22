@@ -508,7 +508,15 @@ void grBigBlue_801E6364(Ground_GObj* gobj)
     scale.x = scale.y = scale.z = 1.0F;
     HSD_JObjSetScale(jobj, &scale);
 
+    /* 120 bytes is thirty of the console's four-byte pointers; the thirty
+     * HSD_JObj* written below are twice that wide on the host, so the size
+     * comes from the element being stored. */
+#ifdef MELEE_HOST
+    gp->u.bigblue.car.collision_jobjs =
+        HSD_MemAlloc(30 * sizeof(*gp->u.bigblue.car.collision_jobjs));
+#else
     gp->u.bigblue.car.collision_jobjs = HSD_MemAlloc(120);
+#endif
     HSD_ASSERT(774, gp->u.carnull.coll_jobj);
 
     gp->u.bigblue.car.ranks = HSD_MemAlloc(30);

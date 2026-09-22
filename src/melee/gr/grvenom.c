@@ -557,9 +557,17 @@ Ground_GObj* grVenom_80203EAC(int gobj_id)
 {
     Ground_GObj* gobj;
     Ground* gp;
+    /* grVe_803E5348 is 0x38 bytes, so +0x44 is past it: on the console
+     * grVe_803E5380 follows it and grVe_StageCallbacks follows that, at
+     * exactly that offset.  The host names the object instead, because
+     * neither the gap nor the element width survives the wider pointers. */
+#ifdef MELEE_HOST
+    StageCallbacks* callbacks = &grVe_StageCallbacks[gobj_id];
+#else
     grVe_Data* base = &grVe_803E5348;
     StageCallbacks* callbacks =
         &((StageCallbacks*) ((char*) base + 0x44))[gobj_id];
+#endif
 
     gobj = Ground_GetStageGObj(gobj_id);
 
