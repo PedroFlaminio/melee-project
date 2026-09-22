@@ -136,9 +136,9 @@ file and line:
 
 | Stage | Cause, after the 21–22 September fixes |
 | --- | --- |
-| 2 Fountain of Dreams | `image_desc` has no translator |
-| 3 Pokemon Stadium | `image_desc` has no translator — *was* a heap overflow in `memzero`, fixed |
-| 4 Princess Peach's Castle | generated layout wrong; extent check catches it |
+| 2 Fountain of Dreams | SIGSEGV — *was* `image_desc`, now translated |
+| 3 Pokemon Stadium | **flaky** — reaches the match 2 runs in 3, so something reads uninitialised memory; `image_desc` and the `memzero` overflow both fixed |
+| 4 Princess Peach's Castle | `dynamicsdata_flag3` has no translator — *was* a wrong block size, fixed |
 | 5 Kongo Jungle | SEGV in `HSD_JObjSetRotationZ`, from `grKongo_801D77E0` |
 | 6 Brinstar | truncated `Item_GObj` in `grZebes_801DA528` — *was* `HSD_FObjLoadDesc`, fixed |
 | 8 Yoshi's Story | `item.c:576`, stage item kind 210 has no attribute translator |
@@ -149,7 +149,7 @@ file and line:
 
 | 22 Venom | SEGV — *was* `HSD_FObjLoadDesc`, fixed |
 | 24 Big Blue | SEGV in `grBigBlue_801ED694` — *was* a console-sized allocation, fixed |
-| 25 Icicle Mountain | generated layout wrong; R04 already noted its offsets |
+| 25 Icicle Mountain | block is 0x13C, layout describes 0xD0 — the struct's offsets are wrong, as R04 noted |
 
 **The `HSD_FObjLoadDesc` cluster is closed.** It was the animation tables: `grAnime_801C7C1C`
 indexes them as `aj = &aj[joint]`, so each entry is an array of animation joints on disc, one
@@ -211,6 +211,7 @@ One row per change that moves the port forward. Keep the newest at the top.
 
 | Date | Overall | Change and evidence |
 | --- | ---: | --- |
+| 2026-09-22 | 46% | `image_desc` becomes a symbol kind the archive layer can name, reusing the materializer the TObj path already had, and the `yakumono_param` extent check reports the size it found — which identified both layout mismatches in one run. Castle's block is 0x148 against a 0x144 struct, one unnamed trailing word, so the generator gained a `DISC_SIZES` table for that; Icicle Mountain is 0x13C against 0xD0, too wide for a tail, matching R04 on its offsets. Stages stayed at 17 of 30: Pokemon Stadium reaches the match only 2 runs in 3 and is not counted, Fountain of Dreams and Castle both advanced to their next symbol. `ctest --preset host-debug` 27/27. |
 | 2026-09-22 | 46% | Stage animation tables materialized as arrays. `grAnime_801C7C1C` indexes them `aj = &aj[joint]`, so each entry is an array of animation joints on disc, one per joint of the model; the host built only the root tree, so any index past the first read the arena. Confirmed at the Brinstar crash (joint index 28, struct full of raw archive offsets) and by probing the table extents against the console strides. **Stages entering a match: 15 → 17 of 30**, and the `HSD_FObjLoadDesc` cluster that held four stages is closed. `ctest --preset host-debug` 27/27. |
 | 2026-09-22 | 45% | Five host-size memory errors fixed, each confirmed by ASan before and after: console-sized allocations in `grrcruise.c`, `grbigblue.c` and `grpstadium.c`, and reads across neighbouring `.data` objects in `grzebes.c` and `grvenom.c`. Stages entering a match stayed at 15 of 30 — every one advanced to its next fault, which is what establishes that these come in chains per stage. The `HSD_FObjLoadDesc` cluster (Brinstar, Mute City, Venom, and Mushroom Kingdom II one step away) is the next lever; the suspect is `map_head`'s animation tables being materialized one tree per entry where the game indexes them as an array. `ctest --preset host-debug` 27/27. |
 | 2026-09-21 | 45% | Stages. `yakumono_param` gets a per-stage layout, generated from each `grXXX.c`'s struct by `port/tools/gen_yakumono_layout.py` and selected by the loading stage's GrKind, with a `--check` test against generator drift. Two truncated 32-bit pointers fixed on the paths that reaching the stages exposed (`Ground_801C0FB8`'s callback node, `granime.c`'s `HSD_ForeachAnim` callback). The select screen refuses a square the host has not been measured to enter. **Stages entering a match: 3 → 15 of 30.** `ctest --preset host-debug` 27/27, 235/235 unit tests. |
