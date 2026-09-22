@@ -140,8 +140,10 @@ def main() -> int:
                     help="drawn frames of match before the route stops")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", help="write one JSON line a stage here")
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="how many times a stage must load before it counts.  A route freezes the clock, so a stage that loads only sometimes is reading something that moves with the address layout -- setarch -R makes such a run repeatable while you chase it.")
     ap.add_argument("--no-audio", action="store_true",
-                    help="run with MELEE_HOST_AUDIO=0.  Off by default: the voices are on in a real run, and turning them off has been seen to decide whether a stage loads at all.")
+                    help="run with MELEE_HOST_AUDIO=0.  Off by default simply because the voices are on in a real run.")
     ap.add_argument("--log-lines", type=int, default=25,
                     help="lines of output kept for a broken run; a\n                          sanitizer report needs more")
     args = ap.parse_args()
@@ -155,12 +157,23 @@ def main() -> int:
     results = []
     broken = []
     for kind in kinds:
-        report = run_stage(binary, args.root, kind, args.frames,
-                           args.timeout, args.log_lines, args.no_audio)
+        attempts = []
+        for _ in range(max(1, args.repeat)):
+            attempts.append(run_stage(binary, args.root, kind, args.frames,
+                                      args.timeout, args.log_lines,
+                                      args.no_audio))
+            if attempts[-1]["status"] != "ok":
+                break
+        report = next((a for a in attempts if a["status"] != "ok"),
+                      attempts[0])
+        report["attempts"] = len(attempts)
+        report["passed"] = sum(1 for a in attempts if a["status"] == "ok")
         results.append(report)
         mark = "ok  " if report["status"] == "ok" else "BAD "
-        print(f"{mark}{kind:>3} {report['name']:<24} {report['status']:<8} "
-              f"{report['detail'][:70]}", flush=True)
+        runs = (f" [{report['passed']}/{report['attempts']}]"
+                if args.repeat > 1 else "")
+        print(f"{mark}{kind:>3} {report['name']:<24} {report['status']:<8}"
+              f"{runs} {report['detail'][:64]}", flush=True)
         if report["status"] != "ok":
             broken.append(report)
 
