@@ -74,6 +74,17 @@ STAGES = [
     (37, "grlast.c",        "anon"),
 ]
 
+# Stages whose block on disc is larger than the struct their grXXX.c declares.
+# The excess is trailing and the stage never reads it, so the layout still
+# describes every field the stage uses; only the extent check needs the real
+# size.  Anything not listed here must match exactly -- a difference is the
+# generator and the struct disagreeing, not an unread tail.
+DISC_SIZES = {
+    # grcastle.c's struct ends at 0x144 with f32 x140; the block is 0x148, one
+    # unnamed word past the last field the stage reads.
+    2: 0x148,
+}
+
 GRKIND_NAMES = {
     2: "Castle", 3: "RCruise", 4: "Kongo", 5: "Garden", 6: "GreatBay",
     7: "Shrine", 8: "Zebes", 9: "Kraid", 10: "Story", 11: "Yorster",
@@ -370,6 +381,7 @@ def collect() -> tuple[list[dict], list[tuple[int, str, str]]]:
                 align = max(align, 4 if f["kind"] == "pointer" else f["width"])
             size = (size + align - 1) // align * align
             done.append(dict(grkind=grkind, module=module, mode="struct",
+                             disc_size=DISC_SIZES.get(grkind, size),
                              name=GRKIND_NAMES[grkind],
                              struct=f"melee_host_yakumono_{GRKIND_NAMES[grkind].lower()}",
                              fields=fields, size=size, source=spec))
@@ -418,10 +430,14 @@ def emit_translator(stage) -> str:
            "    /* The block on disc has to be the size this layout describes;",
            "     * a mismatch means the stage's struct moved under the",
            "     * generator, not that the data is unusual. */",
-           f"    if (melee_host_hsd_reader_extent(reader, root) != 0x{stage['size']:X}) {{",
-           "        melee_host_hsd_reader_fail(",
-           f"            reader, \"{stage['name']} yakumono_param is not "
-           f"0x{stage['size']:X} bytes\");",
+           f"    if (melee_host_hsd_reader_extent(reader, root) != 0x{stage['disc_size']:X}) {{",
+           "        char message[96];",
+           "",
+           "        (void) snprintf(message, sizeof(message),",
+           f"                        \"{stage['name']} yakumono_param is 0x%X \"",
+           f"                        \"bytes, this layout expects 0x{stage['disc_size']:X}\",",
+           "                        melee_host_hsd_reader_extent(reader, root));",
+           "        melee_host_hsd_reader_fail(reader, message);",
            "        return NULL;",
            "    }"]
     for f in stage["fields"]:

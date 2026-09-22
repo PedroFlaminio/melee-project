@@ -41,6 +41,8 @@
 #include <melee/ft/kinds/ftMario/types.h>
 #include <melee/ft/types.h>
 #include <melee/gm/gmevent.h>
+#include <stdio.h>
+
 #include <melee/gr/ground.h>
 #include <melee/gr/types.h>
 #include <melee/it/forward.h>

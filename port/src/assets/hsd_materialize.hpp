@@ -247,6 +247,9 @@ public:
 
     /* An image and optional palette drawn as a screen sprite. */
     [[nodiscard]] HSD_SObjDesc* sobj_desc(std::string_view public_symbol);
+    /* A loose image a stage names directly, rather than one reached
+     * through a TObj or a sprite. */
+    [[nodiscard]] HSD_ImageDesc* image_desc(std::string_view public_symbol);
 
     /* lbRumbleData: a table with neither count nor terminator, which runs as
      * long as each record's command pointer is relocated. */

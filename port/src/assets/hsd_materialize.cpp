@@ -2320,6 +2320,12 @@ u8** HsdMaterializedArchive::sis_table(std::string_view public_symbol)
     return entries;
 }
 
+HSD_ImageDesc*
+HsdMaterializedArchive::image_desc(std::string_view public_symbol)
+{
+    return image_desc(archive_.public_root(public_symbol));
+}
+
 HSD_SObjDesc* HsdMaterializedArchive::sobj_desc(std::string_view public_symbol)
 {
     const HsdRuntimeNode node = archive_.public_root(public_symbol);

@@ -90,7 +90,7 @@ struct SuffixKind {
 };
 
 /* Longest first where one suffix ends another. */
-constexpr std::array<SuffixKind, 11> kSuffixes{ {
+constexpr std::array<SuffixKind, 12> kSuffixes{ {
     { "_scene_data", MELEE_HOST_HSD_SYMBOL_SCENE_DATA },
     { "_scene_models", MELEE_HOST_HSD_SYMBOL_SCENE_MODELS },
     { "_matanim_joint", MELEE_HOST_HSD_SYMBOL_MAT_ANIM_JOINT },
@@ -102,6 +102,7 @@ constexpr std::array<SuffixKind, 11> kSuffixes{ {
     { "_fog", MELEE_HOST_HSD_SYMBOL_FOG },
     { "_sobjdesc", MELEE_HOST_HSD_SYMBOL_SOBJ_DESC },
     { "_figatree", MELEE_HOST_HSD_SYMBOL_FIGATREE },
+    { "_image_desc", MELEE_HOST_HSD_SYMBOL_IMAGE_DESC },
 } };
 
 std::uint32_t read_be32(const u8* bytes)
@@ -200,6 +201,8 @@ void* translate(HsdMaterializedArchive& descriptors,
         return descriptors.sobj_desc(symbol);
     case MELEE_HOST_HSD_SYMBOL_FIGATREE:
         return descriptors.figa_tree(symbol);
+    case MELEE_HOST_HSD_SYMBOL_IMAGE_DESC:
+        return descriptors.image_desc(symbol);
     case MELEE_HOST_HSD_SYMBOL_SCENE_DATA:
         return descriptors.scene_desc(symbol);
     case MELEE_HOST_HSD_SYMBOL_SCENE_MODELS:
@@ -285,6 +288,8 @@ melee_host_hsd_symbol_kind_name(MeleeHostHsdSymbolKind kind)
         return "sobjdesc";
     case MELEE_HOST_HSD_SYMBOL_FIGATREE:
         return "figatree";
+    case MELEE_HOST_HSD_SYMBOL_IMAGE_DESC:
+        return "image_desc";
     case MELEE_HOST_HSD_SYMBOL_SCENE_DATA:
         return "scene_data";
     case MELEE_HOST_HSD_SYMBOL_SCENE_MODELS:

@@ -21,9 +21,14 @@ static void* yakumono_castle(MeleeHostHsdReader* reader, mh_u32 root)
     /* The block on disc has to be the size this layout describes;
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
-    if (melee_host_hsd_reader_extent(reader, root) != 0x144) {
-        melee_host_hsd_reader_fail(
-            reader, "Castle yakumono_param is not 0x144 bytes");
+    if (melee_host_hsd_reader_extent(reader, root) != 0x148) {
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Castle yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x148",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -166,8 +171,13 @@ static void* yakumono_rcruise(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x48) {
-        melee_host_hsd_reader_fail(
-            reader, "RCruise yakumono_param is not 0x48 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "RCruise yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x48",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -205,8 +215,13 @@ static void* yakumono_kongo(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0xBC) {
-        melee_host_hsd_reader_fail(
-            reader, "Kongo yakumono_param is not 0xBC bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Kongo yakumono_param is 0x%X "
+                        "bytes, this layout expects 0xBC",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->unk0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -282,8 +297,13 @@ static void* yakumono_garden(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x20) {
-        melee_host_hsd_reader_fail(
-            reader, "Garden yakumono_param is not 0x20 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Garden yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x20",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -311,8 +331,13 @@ static void* yakumono_zebes(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x190) {
-        melee_host_hsd_reader_fail(
-            reader, "Zebes yakumono_param is not 0x190 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Zebes yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x190",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x00 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -513,8 +538,13 @@ static void* yakumono_kraid(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x34) {
-        melee_host_hsd_reader_fail(
-            reader, "Kraid yakumono_param is not 0x34 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Kraid yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x34",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->map_time_min = melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -547,8 +577,13 @@ static void* yakumono_story(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x24) {
-        melee_host_hsd_reader_fail(
-            reader, "Story yakumono_param is not 0x24 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Story yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x24",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->timer_min = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -577,8 +612,13 @@ static void* yakumono_izumi(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x54) {
-        melee_host_hsd_reader_fail(
-            reader, "Izumi yakumono_param is not 0x54 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Izumi yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x54",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -619,8 +659,13 @@ static void* yakumono_greens(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x7C) {
-        melee_host_hsd_reader_fail(
-            reader, "Greens yakumono_param is not 0x7C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Greens yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x7C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0_blockTimerMin = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -671,8 +716,13 @@ static void* yakumono_corneria(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x8C) {
-        melee_host_hsd_reader_fail(
-            reader, "Corneria yakumono_param is not 0x8C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Corneria yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x8C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -753,8 +803,13 @@ static void* yakumono_venom(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x3C) {
-        melee_host_hsd_reader_fail(
-            reader, "Venom yakumono_param is not 0x3C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Venom yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x3C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -815,8 +870,13 @@ static void* yakumono_pstadium(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x54) {
-        melee_host_hsd_reader_fail(
-            reader, "PStadium yakumono_param is not 0x54 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "PStadium yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x54",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -861,8 +921,13 @@ static void* yakumono_mutecity(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x50) {
-        melee_host_hsd_reader_fail(
-            reader, "MuteCity yakumono_param is not 0x50 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "MuteCity yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x50",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x0, &target)) {
@@ -943,8 +1008,13 @@ static void* yakumono_bigblue(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x144) {
-        melee_host_hsd_reader_fail(
-            reader, "BigBlue yakumono_param is not 0x144 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "BigBlue yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x144",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -1054,8 +1124,13 @@ static void* yakumono_onett(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x68) {
-        melee_host_hsd_reader_fail(
-            reader, "Onett yakumono_param is not 0x68 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Onett yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x68",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->awning_initial = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -1101,8 +1176,13 @@ static void* yakumono_fourside(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x4C) {
-        melee_host_hsd_reader_fail(
-            reader, "Fourside yakumono_param is not 0x4C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Fourside yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x4C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->heli_wait = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -1142,8 +1222,13 @@ static void* yakumono_icemt(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0xD0) {
-        melee_host_hsd_reader_fail(
-            reader, "Icemt yakumono_param is not 0xD0 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Icemt yakumono_param is 0x%X "
+                        "bytes, this layout expects 0xD0",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -1238,8 +1323,13 @@ static void* yakumono_inishie1(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x54) {
-        melee_host_hsd_reader_fail(
-            reader, "Inishie1 yakumono_param is not 0x54 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Inishie1 yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x54",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->unk0 = melee_host_hsd_reader_f32(reader, root + 0x0);
@@ -1283,8 +1373,13 @@ static void* yakumono_inishie2(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x4C) {
-        melee_host_hsd_reader_fail(
-            reader, "Inishie2 yakumono_param is not 0x4C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Inishie2 yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x4C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->unk0 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -1329,8 +1424,13 @@ static void* yakumono_flatzone(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x40) {
-        melee_host_hsd_reader_fail(
-            reader, "Flatzone yakumono_param is not 0x40 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Flatzone yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x40",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->unk0 = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -1366,8 +1466,13 @@ static void* yakumono_oldpupupu(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x34) {
-        melee_host_hsd_reader_fail(
-            reader, "OldPupupu yakumono_param is not 0x34 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "OldPupupu yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x34",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -1402,8 +1507,13 @@ static void* yakumono_oldyoshi(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x1C) {
-        melee_host_hsd_reader_fail(
-            reader, "OldYoshi yakumono_param is not 0x1C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "OldYoshi yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x1C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -1433,8 +1543,13 @@ static void* yakumono_oldkongo(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x70) {
-        melee_host_hsd_reader_fail(
-            reader, "OldKongo yakumono_param is not 0x70 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "OldKongo yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x70",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->rframe_bird_wait_a = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0x0);
@@ -1492,8 +1607,13 @@ static void* yakumono_kinokoroute(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x8) {
-        melee_host_hsd_reader_fail(
-            reader, "KinokoRoute yakumono_param is not 0x8 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "KinokoRoute yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x8",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -1517,8 +1637,13 @@ static void* yakumono_shrineroute(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x2C) {
-        melee_host_hsd_reader_fail(
-            reader, "ShrineRoute yakumono_param is not 0x2C bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "ShrineRoute yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x2C",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x0, &target)) {
@@ -1571,8 +1696,13 @@ static void* yakumono_zebesroute(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x8) {
-        melee_host_hsd_reader_fail(
-            reader, "ZebesRoute yakumono_param is not 0x8 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "ZebesRoute yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x8",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->camera_timer = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -1594,8 +1724,13 @@ static void* yakumono_bigblueroute(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x50) {
-        melee_host_hsd_reader_fail(
-            reader, "BigBlueRoute yakumono_param is not 0x50 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "BigBlueRoute yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x50",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     out->x0 = (mh_s32) melee_host_hsd_reader_u32(reader, root + 0x0);
@@ -1671,8 +1806,13 @@ static void* yakumono_battle(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x8) {
-        melee_host_hsd_reader_fail(
-            reader, "Battle yakumono_param is not 0x8 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Battle yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x8",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x0, &target)) {
@@ -1704,8 +1844,13 @@ static void* yakumono_last(MeleeHostHsdReader* reader, mh_u32 root)
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
     if (melee_host_hsd_reader_extent(reader, root) != 0x10) {
-        melee_host_hsd_reader_fail(
-            reader, "Last yakumono_param is not 0x10 bytes");
+        char message[96];
+
+        (void) snprintf(message, sizeof(message),
+                        "Last yakumono_param is 0x%X "
+                        "bytes, this layout expects 0x10",
+                        melee_host_hsd_reader_extent(reader, root));
+        melee_host_hsd_reader_fail(reader, message);
         return NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x0, &target)) {
