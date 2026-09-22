@@ -62,7 +62,8 @@ SELECT_SCENE = "0x09"
 
 
 def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
-              timeout: int, log_lines: int = 25) -> dict:
+              timeout: int, log_lines: int = 25,
+              no_audio: bool = False) -> dict:
     """Play one stage and classify how it went."""
     route = [*ROUTE_TO_STAGE_SELECT, f"{FORCE_FRAME}:STAGE={kind}",
              f"{FORCE_FRAME + frames}:STOP"]
@@ -72,7 +73,9 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
     try:
         done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True,
                               timeout=timeout,
-                              env={"MELEE_HOST_AUDIO": "0", "PATH": "/usr/bin:/bin",
+                              env={"MELEE_HOST_AUDIO":
+                                       "0" if no_audio else "1",
+                                   "PATH": "/usr/bin:/bin",
                                    "HOME": str(pathlib.Path.home()),
                                    "LANG": "C", "LC_ALL": "C",
                                    # The boot and the scenes do not free what
@@ -137,6 +140,8 @@ def main() -> int:
                     help="drawn frames of match before the route stops")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", help="write one JSON line a stage here")
+    ap.add_argument("--no-audio", action="store_true",
+                    help="run with MELEE_HOST_AUDIO=0.  Off by default: the voices are on in a real run, and turning them off has been seen to decide whether a stage loads at all.")
     ap.add_argument("--log-lines", type=int, default=25,
                     help="lines of output kept for a broken run; a\n                          sanitizer report needs more")
     args = ap.parse_args()
@@ -151,7 +156,7 @@ def main() -> int:
     broken = []
     for kind in kinds:
         report = run_stage(binary, args.root, kind, args.frames,
-                           args.timeout, args.log_lines)
+                           args.timeout, args.log_lines, args.no_audio)
         results.append(report)
         mark = "ok  " if report["status"] == "ok" else "BAD "
         print(f"{mark}{kind:>3} {report['name']:<24} {report['status']:<8} "

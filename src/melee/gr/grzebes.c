@@ -188,6 +188,12 @@ typedef struct grZe_AcidState {
     /* +20 */ s16 x20_anim_idx;
 } grZe_AcidState;
 
+#ifdef MELEE_HOST
+#define ZEBES_ACID(gp) ((grZe_AcidState*) (gp)->u.zebes5.acid_state)
+#else
+#define ZEBES_ACID(gp) ((grZe_AcidState*) &(gp)->u.zebes5.xC8)
+#endif
+
 GrJoint grZe_803E1A10[] = {
     { 1, 6, 21 }, { 4, 6, 14 }, { 3, 6, 1 }, { 2, 7, 6 }, { 5, 7, 1 },
 };
@@ -343,7 +349,11 @@ void grZebes_801D8644(HSD_GObj* gobj)
     Vec3 pos;
     UNUSED u8 _[4];
 
+#ifdef MELEE_HOST
+    gp->u.zebes5.xF0 = grZebes_801D8558(7);
+#else
     gp->u.zebes5.xF0 = (u32) grZebes_801D8558(7);
+#endif
     Ground_801C2ED0(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     child_jobj = Ground_801C3FA4(gobj, 0x1E);
@@ -352,30 +362,39 @@ void grZebes_801D8644(HSD_GObj* gobj)
     grMaterial_801C8DE0(mat_gobj, 0.0f, -7.0f, 0.0f, 0.0f, 7.0f, 0.0f, 3.0f);
     grMaterial_801C8E08(mat_gobj);
     gp->u.zebes5.xC4 = 0;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x00_state = 0xFF;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x01_next = 0;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x02_timer = 0;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x04_base_x =
+    ZEBES_ACID(gp)->x00_state = 0xFF;
+    ZEBES_ACID(gp)->x01_next = 0;
+    ZEBES_ACID(gp)->x02_timer = 0;
+    ZEBES_ACID(gp)->x04_base_x =
         HSD_JObjGetTranslationX(child_jobj);
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x08_offset = 0.0f;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x0C_velocity = 0.0f;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x10_damage = 0.0f;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x14_jobj1 = child_jobj;
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x18_jobj2 =
+    ZEBES_ACID(gp)->x08_offset = 0.0f;
+    ZEBES_ACID(gp)->x0C_velocity = 0.0f;
+    ZEBES_ACID(gp)->x10_damage = 0.0f;
+    ZEBES_ACID(gp)->x14_jobj1 = child_jobj;
+    ZEBES_ACID(gp)->x18_jobj2 =
         Ground_801C3FA4(gobj, 0x20);
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x1C_mat = mat_gobj2 = mat_gobj;
+    ZEBES_ACID(gp)->x1C_mat = mat_gobj2 = mat_gobj;
 
-    ((grZe_AcidState*) &gp->u.zebes5.xC8)->x20_anim_idx = 0x1C;
+    ZEBES_ACID(gp)->x20_anim_idx = 0x1C;
     gp->u.zebes5.xEC = 0;
     gp->u.zebes5.xF4 = 0;
     pos = grZe_803B7FF0.player_pos;
     mat_gobj2 =
         grMaterial_801C8D44(0, 0, gp, &pos, 0, NULL, fn_801DAC90, NULL);
     grMaterial_801C8E08(mat_gobj2);
+#ifdef MELEE_HOST
+    gp->u.zebes5.x100 = mat_gobj2;
+#else
     gp->u.zebes5.x100 = (u32) mat_gobj2;
+#endif
     grZebes_801DC9DC((s32) gobj);
+#ifdef MELEE_HOST
+    gp->u.zebes5.xFC = grZakoGenerator_801CA394(
+        (UNK_T) &grZe_803E1B90, 0xA, (UNK_T) grZebes_801DCB64, 1.0f);
+#else
     gp->u.zebes5.xFC = (u32) grZakoGenerator_801CA394(
         (UNK_T) &grZe_803E1B90, 0xA, (UNK_T) grZebes_801DCB64, 1.0f);
+#endif
     mpJointSetB10(0);
     Ground_801C2FE0((Ground_GObj*) gobj);
 }
@@ -454,7 +473,7 @@ void grZebes_801D881C(HSD_GObj* gobj)
     s32 result;
     int vertex_idx;
     sima_gobj = (HSD_GObj*) gp->u.zebes5.xF0;
-    result = grZebes_801DA528(gobj, &gp->u.zebes5.xC8, 1, 2);
+    result = grZebes_801DA528(gobj, ZEBES_ACID(gp), 1, 2);
     PAD_STACK(0x8);
 
     if ((s32) gp->u.zebes5.xEC != result) {

@@ -123,9 +123,43 @@ HostArchive* entry_of(HSD_Archive* archive)
     return found == archives.end() ? nullptr : found->second.get();
 }
 
+/* Symbols the game asks for and then checks for NULL itself, so the host
+ * handing back nothing is a state the game already models rather than a
+ * failure to report.  Each entry names where that check lives, so the claim
+ * can be read against the code; a symbol only belongs here once its caller
+ * has been read.  Everything else still counts as refused, because a symbol
+ * nobody checks is a stage running on data the host never built.
+ *
+ * The consequence is visible, not silent: the stage loads with that feature
+ * absent -- the flags on Princess Peach's Castle and Rainbow Cruise do not
+ * sway -- until DynamicsData's polymorphic descriptor is translated. */
+constexpr std::array<std::string_view, 4> kOptionalSymbols{ {
+    "dynamicsdata_flag3",    /* grcastle.c:427, checked before flag4 */
+    "dynamicsdata_flag4",    /* grcastle.c:430, checked before flag6 */
+    "dynamicsdata_flag6",    /* grcastle.c:433, checked before use */
+    "dynamicsdata_shipflag", /* grrcruise.c:325, else-branch nulls the data */
+} };
+
+bool is_optional_symbol(std::string_view name)
+{
+    for (const std::string_view optional : kOptionalSymbols) {
+        if (name == optional) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void refuse(std::string_view symbol, std::string_view reason)
 {
     Registry& state = registry();
+
+    if (is_optional_symbol(symbol)) {
+        OSReport("host HSD archive: %s is absent on the host; the game "
+                 "checks for that\n",
+                 std::string(symbol).c_str());
+        return;
+    }
     state.refused += 1;
     state.last_error = std::string(symbol) + ": " + std::string(reason);
     OSReport("host HSD archive: cannot translate %s\n",

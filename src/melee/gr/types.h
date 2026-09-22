@@ -1015,12 +1015,37 @@ struct grZebes_GroundVars5 {
     /* +24 gp+E8 */ s16 xE8;
     /* +26 gp+EA */ s16 xEA;
     /* +28 gp+EC */ u32 xEC;
+#ifdef MELEE_HOST
+    /* xF0, xFC and x100 each hold an address the stage casts back out: a
+     * Ground_GObj, a grZakoGenerator_Config and the material GObj.  A u32
+     * keeps those whole only where pointers are four bytes. */
+    /* +2C gp+F0 */ Ground_GObj* xF0;
+#else
     /* +2C gp+F0 */ u32 xF0;
+#endif
     /* +30 gp+F4 */ s16 xF4;
     /* +32 gp+F6 */ s16 xF6;
     /* +34 gp+F8 */ u32 xF8;
+#ifdef MELEE_HOST
+    /* +38 gp+FC */ void* xFC;
+#else
     /* +38 gp+FC */ u32 xFC;
+#endif
+#ifdef MELEE_HOST
+    /* x100 holds the material GObj grZebes_801DBB60 is called with; a u32
+     * keeps it whole only where pointers are four bytes. */
+    /* +3C gp+100 */ HSD_GObj* x100;
+#else
     /* +3C gp+100 */ u32 x100;
+#endif
+#ifdef MELEE_HOST
+    /* grzebes.c overlays its acid state on xC8.  That state is 0x24 bytes on
+     * the console, where the next field written starts at gp+EC; its three
+     * pointers make it 0x38 on the host, so xEC, xF0 and xF4 land inside it
+     * and tear the Item_GObj it holds in half.  On the host the overlay gets
+     * its own room past the named fields, where nothing else writes. */
+    u8 acid_state[0x40];
+#endif
 };
 
 struct grRCruise_Entry {
