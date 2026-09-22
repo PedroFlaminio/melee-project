@@ -1436,6 +1436,93 @@ static bool stage_count_ok(MeleeHostHsdReader* reader, s32 count,
     return true;
 }
 
+/* The stage's animation tables are indexed twice: the outer table picks an
+ * animation set, and grAnime_801C7C1C then takes the entry for one joint of
+ * the model out of it with `aj = &aj[joint]`.  So each entry is an array of
+ * animation joints on disc, one per joint of the model, not a single tree -
+ * building only the root leaves every index past the first reading whatever
+ * follows it in the host's arena.
+ *
+ * The count comes from the model's own joint tree, which is materialized
+ * before the tables and has one node per index the game can ask for.  Each
+ * element is built as its own tree, which the reader shares by address, and
+ * its root is copied into the array so the elements sit contiguously the way
+ * the game indexes them. */
+static mh_u32 stage_joint_count(const HSD_Joint* joint)
+{
+    mh_u32 count = 0;
+
+    for (; joint != NULL; joint = joint->next) {
+        count += 1 + stage_joint_count(joint->child);
+    }
+    return count;
+}
+
+/* Console strides; the host's structs are wider, which is the whole point. */
+#define STAGE_ANIM_JOINT_STRIDE 0x14
+#define STAGE_MAT_ANIM_JOINT_STRIDE 0x0C
+#define STAGE_SHAPE_ANIM_JOINT_STRIDE 0x0C
+
+static void* stage_anim_array(MeleeHostHsdReader* reader, mh_u32 target,
+                              mh_u32 count, mh_u32 stride, size_t host_size,
+                              void* (*build)(MeleeHostHsdReader*, mh_u32))
+{
+    unsigned char* array;
+    mh_u32 i;
+
+    if (count == 0) {
+        count = 1;
+    }
+    array = melee_host_hsd_reader_allocate(reader, host_size * count,
+                                           alignof(void*));
+    if (array == NULL) {
+        return NULL;
+    }
+    memset(array, 0, host_size * count);
+    for (i = 0; i < count; i++) {
+        void* const one = build(reader, target + i * stride);
+
+        if (one == NULL) {
+            break;
+        }
+        memcpy(array + (size_t) i * host_size, one, host_size);
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : array;
+}
+
+/* A NULL-terminated table of pointers, each entry an array of `count`
+ * animation joints built by `build`. */
+static void** stage_anim_table(MeleeHostHsdReader* reader, mh_u32 at,
+                               mh_u32 count, mh_u32 stride, size_t host_size,
+                               void* (*build)(MeleeHostHsdReader*, mh_u32))
+{
+    const mh_u32 limit = melee_host_hsd_reader_extent(reader, at) / 4;
+    mh_u32 entries = 0;
+    void** table;
+    mh_u32 i;
+
+    for (entries = 0; entries < limit; entries++) {
+        bool present;
+        (void) target_of(reader, at + entries * 4, &present);
+        if (!present) {
+            break;
+        }
+    }
+    table = melee_host_hsd_reader_allocate(
+        reader, sizeof(void*) * (entries + 1), alignof(void*));
+    if (table == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < entries; i++) {
+        bool present;
+        const mh_u32 target = target_of(reader, at + i * 4, &present);
+        table[i] = stage_anim_array(reader, target, count, stride, host_size,
+                                    build);
+    }
+    table[entries] = NULL;
+    return melee_host_hsd_reader_failed(reader) ? NULL : table;
+}
+
 /* A NULL-terminated table of pointers, each entry built by `build`, bounded by
  * the block's extent; the terminator is kept. */
 static void** stage_pointer_table(MeleeHostHsdReader* reader, mh_u32 at,
@@ -1487,24 +1574,32 @@ static void stage_model(MeleeHostHsdReader* reader, mh_u32 at,
 {
     bool present;
     mh_u32 target;
+    mh_u32 joints;
     s32 count;
     s32 i;
 
     target = target_of(reader, at + 0x00, &present);
     model->unk0 = present ? melee_host_hsd_reader_joint(reader, target) : NULL;
+    joints = stage_joint_count(model->unk0);
     target = target_of(reader, at + 0x04, &present);
-    model->unk4 = present ? (HSD_AnimJoint**) stage_pointer_table(
-                                reader, target, melee_host_hsd_reader_anim_joint)
+    model->unk4 = present ? (HSD_AnimJoint**) stage_anim_table(
+                                reader, target, joints,
+                                STAGE_ANIM_JOINT_STRIDE, sizeof(HSD_AnimJoint),
+                                melee_host_hsd_reader_anim_joint)
                           : NULL;
     target = target_of(reader, at + 0x08, &present);
-    model->unk8 = present
-                      ? (HSD_MatAnimJoint**) stage_pointer_table(
-                            reader, target, melee_host_hsd_reader_mat_anim_joint)
-                      : NULL;
+    model->unk8 = present ? (HSD_MatAnimJoint**) stage_anim_table(
+                                reader, target, joints,
+                                STAGE_MAT_ANIM_JOINT_STRIDE,
+                                sizeof(HSD_MatAnimJoint),
+                                melee_host_hsd_reader_mat_anim_joint)
+                          : NULL;
     target = target_of(reader, at + 0x0C, &present);
     model->unkC =
-        present ? (HSD_ShapeAnimJoint**) stage_pointer_table(
-                      reader, target, melee_host_hsd_reader_shape_anim_joint)
+        present ? (HSD_ShapeAnimJoint**) stage_anim_table(
+                      reader, target, joints, STAGE_SHAPE_ANIM_JOINT_STRIDE,
+                      sizeof(HSD_ShapeAnimJoint),
+                      melee_host_hsd_reader_shape_anim_joint)
                 : NULL;
     target = target_of(reader, at + 0x10, &present);
     model->x10 = present ? melee_host_hsd_reader_camera(reader, target) : NULL;
@@ -1571,26 +1666,34 @@ static void* stage_quake_model_set(MeleeHostHsdReader* reader, mh_u32 root)
         reader, sizeof(*model), alignof(DynamicModelDesc));
     bool present;
     mh_u32 target;
+    mh_u32 joints;
 
     if (model == NULL) {
         return NULL;
     }
     target = target_of(reader, root + 0x0, &present);
     model->joint = present ? melee_host_hsd_reader_joint(reader, target) : NULL;
+    joints = stage_joint_count(model->joint);
     target = target_of(reader, root + 0x4, &present);
-    model->anims = present ? (HSD_AnimJoint**) stage_pointer_table(
-                                 reader, target, melee_host_hsd_reader_anim_joint)
+    model->anims = present ? (HSD_AnimJoint**) stage_anim_table(
+                                 reader, target, joints,
+                                 STAGE_ANIM_JOINT_STRIDE, sizeof(HSD_AnimJoint),
+                                 melee_host_hsd_reader_anim_joint)
                            : NULL;
     target = target_of(reader, root + 0x8, &present);
-    model->matanims =
-        present ? (HSD_MatAnimJoint**) stage_pointer_table(
-                      reader, target, melee_host_hsd_reader_mat_anim_joint)
-                : NULL;
+    model->matanims = present ? (HSD_MatAnimJoint**) stage_anim_table(
+                                    reader, target, joints,
+                                    STAGE_MAT_ANIM_JOINT_STRIDE,
+                                    sizeof(HSD_MatAnimJoint),
+                                    melee_host_hsd_reader_mat_anim_joint)
+                              : NULL;
     target = target_of(reader, root + 0xC, &present);
-    model->shapeanims =
-        present ? (HSD_ShapeAnimJoint**) stage_pointer_table(
-                      reader, target, melee_host_hsd_reader_shape_anim_joint)
-                : NULL;
+    model->shapeanims = present ? (HSD_ShapeAnimJoint**) stage_anim_table(
+                                      reader, target, joints,
+                                      STAGE_SHAPE_ANIM_JOINT_STRIDE,
+                                      sizeof(HSD_ShapeAnimJoint),
+                                      melee_host_hsd_reader_shape_anim_joint)
+                                : NULL;
     return melee_host_hsd_reader_failed(reader) ? NULL : model;
 }
 
