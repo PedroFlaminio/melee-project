@@ -134,32 +134,42 @@ this hides nothing from the sweep.
 (`sweep_stages.py --binary build/host-sanitize/port/melee-pc`) gave every remaining stage a
 file and line:
 
-| Stage | Cause |
+| Stage | Cause, after the 21–22 September fixes |
 | --- | --- |
 | 2 Fountain of Dreams | `image_desc` has no translator |
-| 3 Pokemon Stadium | ASan heap-buffer-overflow in `memzero` (`lb/lb_00B0.c:398`) |
+| 3 Pokemon Stadium | `image_desc` has no translator — *was* a heap overflow in `memzero`, fixed |
 | 4 Princess Peach's Castle | generated layout wrong; extent check catches it |
-| 5 Kongo Jungle | ASan SEGV in `HSD_JObjSetRotationZ` (`jobj.h:338`), from `grKongo_801D77E0` |
-| 6 Brinstar | ASan global-buffer-overflow in `grZebes_GetBubbleStartX` (`grzebes.c:2262`) |
+| 5 Kongo Jungle | SEGV in `HSD_JObjSetRotationZ`, from `grKongo_801D77E0` |
+| 6 Brinstar | SEGV in `HSD_FObjLoadDesc` — *was* a global overflow in `grZebes_GetBubbleStartX`, fixed |
 | 8 Yoshi's Story | `item.c:576`, stage item kind 210 has no attribute translator |
-| 10 Mute City | descriptor pointer arrives as a raw offset (`granime.c` → `HSD_FObjLoadDesc`) |
-| 11 Rainbow Cruise | *was* a heap overflow from a console-sized allocation — fixed; now SEGV at `grrcruise.c:767` |
+| 10 Mute City | SEGV in `HSD_FObjLoadDesc` |
+| 11 Rainbow Cruise | SEGV at `grrcruise.c:767` — *was* a console-sized allocation, fixed |
 | 13 Great Bay | `item.c:576`, stage item kind 221 has no attribute translator |
 | 16 Yoshi's Island | garbage joint pointer in `JObjLoadJointSub` (`jobj.c:617`) |
-| 20 Mushroom Kingdom II | ASan SEGV in `grAnime_801C67A8` (`granime.c:159`), `matanim` is a raw offset |
-| 22 Venom | ASan global-buffer-overflow in `grVenom_80203EAC` (`grvenom.c:571`) |
-| 24 Big Blue | ASan heap-buffer-overflow in `grBigBlue_801E6364` (`grbigblue.c:518`) |
+| 20 Mushroom Kingdom II | SEGV in `grAnime_801C67A8` (`granime.c:159`) |
+| 22 Venom | SEGV in `HSD_FObjLoadDesc` — *was* a global overflow from byte-offset arithmetic, fixed |
+| 24 Big Blue | SEGV in `grBigBlue_801ED694` — *was* a console-sized allocation, fixed |
 | 25 Icicle Mountain | generated layout wrong; R04 already noted its offsets |
 
-The shape of the work is now clear, and it is not one lever. Most of these are the documented
+**The `HSD_FObjLoadDesc` cluster is the next lever.** Brinstar, Mute City and Venom all stop
+there, and Mushroom Kingdom II stops one step away in `grAnime_801C67A8`. The path is
+`grAnime_801C7C1C` → `grAnime_801C6A54` → `HSD_AObjLoadDesc`, and the suspect is visible in
+`granime.c:913`: the game does `aj = &aj[arg2]`, indexing an **array** of `HSD_AnimJoint`
+taken from the stage's `map_head` animation tables. The host materializes those tables through
+`stage_pointer_table(..., melee_host_hsd_reader_anim_joint)` in `game_data_translators.c`,
+which produces one tree per entry rather than a contiguous array, so any `arg2 > 0` indexes
+off the end. Confirming that is the first thing to do next.
+
+The shape of the work is settled, and it is not one lever per stage. These are the documented
 host-size families — an allocation sized from the console's table, a read that runs past a
 global the console could read past, a descriptor offset used as a pointer — each small and
-well-precedented, but **there is a chain of them per stage**: fixing Rainbow Cruise's
-allocation (`Map_VanishEntry` is wider on the host than the `Map_VanishDesc` table it was
-sized from) removed that overflow and immediately exposed the next fault in the same stage.
+well-precedented, but **there is a chain of them per stage**. Five such fixes went in on
+21–22 September (Rainbow Cruise, Pokemon Stadium, Brinstar, Venom, Big Blue) and the number of
+stages entering a match did not move: every one advanced to its next fault instead. That is
+the measurement, not a setback — it is what tells you to budget several fixes per stage.
 
 The sanitizer is the tool that walks those chains; a stage is done when a sanitized run of it
-reaches the match scene. Budget per stage accordingly, rather than expecting one fix each.
+reaches the match scene, not when one ASan report clears.
 
 ### Why the suite never saw it
 
@@ -202,6 +212,7 @@ One row per change that moves the port forward. Keep the newest at the top.
 
 | Date | Overall | Change and evidence |
 | --- | ---: | --- |
+| 2026-09-22 | 45% | Five host-size memory errors fixed, each confirmed by ASan before and after: console-sized allocations in `grrcruise.c`, `grbigblue.c` and `grpstadium.c`, and reads across neighbouring `.data` objects in `grzebes.c` and `grvenom.c`. Stages entering a match stayed at 15 of 30 — every one advanced to its next fault, which is what establishes that these come in chains per stage. The `HSD_FObjLoadDesc` cluster (Brinstar, Mute City, Venom, and Mushroom Kingdom II one step away) is the next lever; the suspect is `map_head`'s animation tables being materialized one tree per entry where the game indexes them as an array. `ctest --preset host-debug` 27/27. |
 | 2026-09-21 | 45% | Stages. `yakumono_param` gets a per-stage layout, generated from each `grXXX.c`'s struct by `port/tools/gen_yakumono_layout.py` and selected by the loading stage's GrKind, with a `--check` test against generator drift. Two truncated 32-bit pointers fixed on the paths that reaching the stages exposed (`Ground_801C0FB8`'s callback node, `granime.c`'s `HSD_ForeachAnim` callback). The select screen refuses a square the host has not been measured to enter. **Stages entering a match: 3 → 15 of 30.** `ctest --preset host-debug` 27/27, 235/235 unit tests. |
 | 2026-09-21 | 42% | Stage sweep. A person reports playing many matches, with crashes on some stages; `port/tools/sweep_stages.py` (new) forces each stage through the game's own `force_stage_id` and finds **3 of 30 stages load** — the other 27 abort on `yakumono_param`, one cause. Added `FRAME:STAGE=KIND` to `--run-modes` and `melee_host_sss_force_stage` to reach stages without the icon layout or a save. `random_cpu_matches.py` had played every match on Hyrule Temple, one of the three that work, which is why 14/14 CPU matches passed the same day. Estimate revised down from 45%: no regression, better measurement. |
 | 2026-09-21 | 45% | Baseline for this document. Repository cleaned of the decomp project: the `upstream` remote, the mwcc/Nix/decomp-toolkit build, the Doxygen site, the PowerPC-only runtime sources and the committed build artifacts are gone, and all documentation is in English. `tools/port_inventory.py` stops counting `Object(Matching, ...)`. Build clean, `ctest --preset host-debug` 26/26. |
