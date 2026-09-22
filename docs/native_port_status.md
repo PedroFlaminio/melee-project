@@ -596,7 +596,7 @@ Each translator below unblocked the next step of match entry, in this order:
 - The title's texture cache and the presenter recognize an image by the address of its data and
   its palette. An EFB copy that rewrites the address is re-decoded by the copy's generation, but
   an animation that rewrites an image by some other means keeps showing the first one.
-- **19 of the 30 stages the select screen offers enter a match**, measured 22 September 2026
+- **17 of the 30 stages the select screen offers enter a match on every run**, measured 22 September 2026
   with `port/tools/sweep_stages.py`; the list is in
   [`project-progress.md`](project-progress.md). `yakumono_param` now has a per-stage layout,
   generated from each `grXXX.c`'s struct and selected by the loading stage's GrKind. Of the
