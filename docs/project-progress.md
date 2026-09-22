@@ -14,7 +14,7 @@ content.
 
 ## Current estimate — 21 September 2026
 
-**Overall: 46% (confidence range: 36–56%).**
+**Overall: 47% (confidence range: 37–57%).**
 
 Moved twice on 21 September: down to 42% when the stage sweep found only 3 of 30 stages
 loading, then back to 45% once the per-stage `yakumono_param` layouts took that to 15. The
@@ -29,8 +29,8 @@ An area at 100% in the MVP table can sit well below that here.
 
 | Area | Weight | Done | Where it stands |
 | --- | ---: | ---: | --- |
-| Game modes and content | 25% | 15% | 3 of the 45 modes in `gm/forward.h` are in the host table: `GM_TITLE`, `GM_MENU`, `GM_VS`. VS is complete except the challenger match (its own stage, against a CPU). The engine the other modes reuse — fighters, stages, items, HUD, results, sudden death — already runs, so the next modes should cost less than VS did, but none has been attempted. Content within VS: all 26 characters load, and 17 of 30 stages, up from 3 on 21 September. |
-| Assets and data translation | 15% | 55% | 61 translators registered. All 28 `ftData*` are translated, each with its character's item attribute table. Stages: `coll_data` 71/71, `grGroundParam` 71/71, `map_head` 69/71, `map_plit`/`quake_model_set`/`itemdata`/`ALDYakuAll` across the disc. Gaps, in order of impact: `yakumono_param` now has a per-stage layout generated from the game's structs, so 17 of 30 stages load; two have a wrong layout and the rest fail past it; the per-type special attributes and dynamics of `itPublicData`'s common items and Pokémon are left out and panic at `item.c:576`; every event level's `x4` parameter is NULL; loose images and palettes have no schema. |
+| Game modes and content | 25% | 15% | 3 of the 45 modes in `gm/forward.h` are in the host table: `GM_TITLE`, `GM_MENU`, `GM_VS`. VS is complete except the challenger match (its own stage, against a CPU). The engine the other modes reuse — fighters, stages, items, HUD, results, sudden death — already runs, so the next modes should cost less than VS did, but none has been attempted. Content within VS: all 26 characters load, and 19 of 30 stages, up from 3 on 21 September. |
+| Assets and data translation | 15% | 55% | 61 translators registered. All 28 `ftData*` are translated, each with its character's item attribute table. Stages: `coll_data` 71/71, `grGroundParam` 71/71, `map_head` 69/71, `map_plit`/`quake_model_set`/`itemdata`/`ALDYakuAll` across the disc. Gaps, in order of impact: `yakumono_param` now has a per-stage layout generated from the game's structs, so 19 of 30 stages load; two have a wrong layout and the rest fail past it; the per-type special attributes and dynamics of `itPublicData`'s common items and Pokémon are left out and panic at `item.c:576`; every event level's `x4` parameter is NULL; loose images and palettes have no schema. |
 | Rendering (GX) | 15% | 75% | A sweep of 725 joint symbols gives 100.0% of 3,379,817 triangles with the TEV fully evaluated, zero display list errors and zero rejected indices. Fog, bump (`GX_TG_BUMPn`), depth textures and indirect TEV are in the presenter; EFB copies rasterize on the CPU in I4 and in colour. Gaps: mipmaps (minification uses the magnification filter), fog range adjustment, `GXEnableTexOffsets`, `GXSetTevSwapModeTable`, `GXCopyDisp` materialization, and no visual comparison against a reference for any of it. |
 | Platform layer (OS, memory, time, DVD, input) | 10% | 70% | Heap, arena, alarms, scheduler, virtual DVD, ARAM/ARQ and PAD all run. Gaps: DVD cancellation/streaming/priority, controller remapping, rumble, hotplug during a match, and the resource manager that should consume the extracted manifest. |
 | Audio | 8% | 85% | The AX mixer plays the game's voices, music and effects, with aux buses (reverb and delay), ITD and surround encoded to stereo. Music and one effect match reference decoders at correlation 1.000000. Gaps: no sample-by-sample comparison against the console for reverb, ITD or surround; chorus and high reverb unported (the game does not use them). |
@@ -83,14 +83,14 @@ as matching the console, and nothing has been compared against the DOL in Dolphi
 
 ## Known issues
 
-### 17 of 30 stages load (was 3)
+### 19 of 30 stages load (was 3)
 
 Reported from real play on 21 September 2026: picking most stages crashed the game at match
 start. Root cause and fix below; measured with `port/tools/sweep_stages.py`.
 
 | | Stages |
 | --- | --- |
-| Loads (17) | 7 Corneria, 9 Onett, 12 Jungle Japes, 14 Hyrule Temple, 15 Brinstar Depths, 16 Yoshi's Island, 17 Green Greens, 18 Fourside, 19 Mushroom Kingdom, 20 Mushroom Kingdom II, 23 Poke Floats, 27 Flat Zone, 28 Dream Land N64, 29 Yoshi's Island N64, 30 Kongo Jungle N64, 31 Battlefield, 32 Final Destination |
+| Loads (19) | 3 Pokemon Stadium, 4 Princess Peach's Castle, 7 Corneria, 9 Onett, 12 Jungle Japes, 14 Hyrule Temple, 15 Brinstar Depths, 16 Yoshi's Island, 17 Green Greens, 18 Fourside, 19 Mushroom Kingdom, 20 Mushroom Kingdom II, 23 Poke Floats, 27 Flat Zone, 28 Dream Land N64, 29 Yoshi's Island N64, 30 Kongo Jungle N64, 31 Battlefield, 32 Final Destination |
 | Wrong layout (2) | 4 Princess Peach's Castle, 25 Icicle Mountain — the generated extent check catches both |
 | Stops at another symbol (2) | 2 Fountain of Dreams, 3 Pokemon Stadium — `image_desc`, which has no translator |
 | Crashes deeper in stage setup (10) | 5 Kongo Jungle, 6 Brinstar, 8 Yoshi's Story, 10 Mute City, 11 Rainbow Cruise, 13 Great Bay, 16 Yoshi's Island, 20 Mushroom Kingdom II, 22 Venom, 24 Big Blue |
@@ -137,10 +137,9 @@ file and line:
 | Stage | Cause, after the 21–22 September fixes |
 | --- | --- |
 | 2 Fountain of Dreams | SIGSEGV — *was* `image_desc`, now translated |
-| 3 Pokemon Stadium | **flaky** — reaches the match 2 runs in 3, so something reads uninitialised memory; `image_desc` and the `memzero` overflow both fixed |
-| 4 Princess Peach's Castle | `dynamicsdata_flag3` has no translator — *was* a wrong block size, fixed |
+
 | 5 Kongo Jungle | SEGV in `HSD_JObjSetRotationZ`, from `grKongo_801D77E0` |
-| 6 Brinstar | truncated `Item_GObj` in `grZebes_801DA528` — *was* `HSD_FObjLoadDesc`, fixed |
+| 6 Brinstar | SIGSEGV; three truncations fixed so far (acid-state overlay, xF0, xFC, x100) and the chain continues |
 | 8 Yoshi's Story | `item.c:576`, stage item kind 210 has no attribute translator |
 | 10 Mute City | SIGBUS — *was* `HSD_FObjLoadDesc`, fixed |
 | 11 Rainbow Cruise | SEGV at `grrcruise.c:767` — *was* a console-sized allocation, fixed |
@@ -150,6 +149,13 @@ file and line:
 | 22 Venom | SEGV — *was* `HSD_FObjLoadDesc`, fixed |
 | 24 Big Blue | SEGV in `grBigBlue_801ED694` — *was* a console-sized allocation, fixed |
 | 25 Icicle Mountain | block is 0x13C, layout describes 0xD0 — the struct's offsets are wrong, as R04 noted |
+
+**Turning the voices off changes whether a stage loads.** Princess Peach's Castle reaches
+the match with `MELEE_HOST_AUDIO=1` and segfaults with `MELEE_HOST_AUDIO=0`, reproducibly.
+`sweep_stages.py` used to force the voices off, which is not how the game runs, and that
+misreported Castle as broken and Pokemon Stadium as intermittent. The sweep now leaves audio
+on by default. The underlying defect is not fixed: `native_port_status.md` still claims a
+route gives the same trace with and without sound, and that is false for at least this stage.
 
 **The `HSD_FObjLoadDesc` cluster is closed.** It was the animation tables: `grAnime_801C7C1C`
 indexes them as `aj = &aj[joint]`, so each entry is an array of animation joints on disc, one
@@ -211,6 +217,7 @@ One row per change that moves the port forward. Keep the newest at the top.
 
 | Date | Overall | Change and evidence |
 | --- | ---: | --- |
+| 2026-09-22 | 47% | `dynamicsdata_*` symbols the game NULL-checks itself no longer count as refusals, so Princess Peach's Castle loads with its flags not swaying rather than panicking. The stage sweep stopped forcing `MELEE_HOST_AUDIO=0`, which had been deciding whether a stage loads and had misreported Castle as broken and Pokemon Stadium as flaky. Brinstar's acid-state overlay moved out of the fields that were tearing its `Item_GObj` in half, and three of its pointer-in-`u32` fields widened, though it still does not load. **Stages entering a match: 17 → 19 of 30.** `ctest --preset host-debug` 27/27. |
 | 2026-09-22 | 46% | `image_desc` becomes a symbol kind the archive layer can name, reusing the materializer the TObj path already had, and the `yakumono_param` extent check reports the size it found — which identified both layout mismatches in one run. Castle's block is 0x148 against a 0x144 struct, one unnamed trailing word, so the generator gained a `DISC_SIZES` table for that; Icicle Mountain is 0x13C against 0xD0, too wide for a tail, matching R04 on its offsets. Stages stayed at 17 of 30: Pokemon Stadium reaches the match only 2 runs in 3 and is not counted, Fountain of Dreams and Castle both advanced to their next symbol. `ctest --preset host-debug` 27/27. |
 | 2026-09-22 | 46% | Stage animation tables materialized as arrays. `grAnime_801C7C1C` indexes them `aj = &aj[joint]`, so each entry is an array of animation joints on disc, one per joint of the model; the host built only the root tree, so any index past the first read the arena. Confirmed at the Brinstar crash (joint index 28, struct full of raw archive offsets) and by probing the table extents against the console strides. **Stages entering a match: 15 → 17 of 30**, and the `HSD_FObjLoadDesc` cluster that held four stages is closed. `ctest --preset host-debug` 27/27. |
 | 2026-09-22 | 45% | Five host-size memory errors fixed, each confirmed by ASan before and after: console-sized allocations in `grrcruise.c`, `grbigblue.c` and `grpstadium.c`, and reads across neighbouring `.data` objects in `grzebes.c` and `grvenom.c`. Stages entering a match stayed at 15 of 30 — every one advanced to its next fault, which is what establishes that these come in chains per stage. The `HSD_FObjLoadDesc` cluster (Brinstar, Mute City, Venom, and Mushroom Kingdom II one step away) is the next lever; the suspect is `map_head`'s animation tables being materialized one tree per entry where the game indexes them as an array. `ctest --preset host-debug` 27/27. |
