@@ -596,13 +596,13 @@ Each translator below unblocked the next step of match entry, in this order:
 - The title's texture cache and the presenter recognize an image by the address of its data and
   its palette. An EFB copy that rewrites the address is re-decoded by the copy's generation, but
   an animation that rewrites an image by some other means keeps showing the first one.
-- **15 of the 30 stages the select screen offers enter a match**, measured 21 September 2026
+- **17 of the 30 stages the select screen offers enter a match**, measured 22 September 2026
   with `port/tools/sweep_stages.py`; the list is in
   [`project-progress.md`](project-progress.md). `yakumono_param` now has a per-stage layout,
   generated from each `grXXX.c`'s struct and selected by the loading stage's GrKind. Of the
   rest: Castle and Icicle Mountain have a wrong generated layout, which their extent check
   catches; Fountain of Dreams and Pokemon Stadium stop at `image_desc`, which has no
-  translator; ten crash further into stage setup. The select screen refuses a square the host
+  translator; eight crash further into stage setup, each with a named fault. The select screen refuses a square the host
   has not been measured to enter (`melee_host_stage_is_playable`), and
   `melee_host_stage_symbols_check` still raises an `OSPanic` as the backstop, because nothing
   in the engine can unwind a half-built stage. `ground.c`'s `stage_datas` links every stage,
