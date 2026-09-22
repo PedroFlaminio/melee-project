@@ -1221,12 +1221,12 @@ static void* yakumono_icemt(MeleeHostHsdReader* reader, mh_u32 root)
     /* The block on disc has to be the size this layout describes;
      * a mismatch means the stage's struct moved under the
      * generator, not that the data is unusual. */
-    if (melee_host_hsd_reader_extent(reader, root) != 0xD0) {
+    if (melee_host_hsd_reader_extent(reader, root) != 0x13C) {
         char message[96];
 
         (void) snprintf(message, sizeof(message),
                         "Icemt yakumono_param is 0x%X "
-                        "bytes, this layout expects 0xD0",
+                        "bytes, this layout expects 0x13C",
                         melee_host_hsd_reader_extent(reader, root));
         melee_host_hsd_reader_fail(reader, message);
         return NULL;
@@ -1299,13 +1299,102 @@ static void* yakumono_icemt(MeleeHostHsdReader* reader, mh_u32 root)
     }
     out->xB8 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0xB8);
     out->pad = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0xBA);
-    out->xBC_kind = melee_host_hsd_reader_u16(reader, root + 0xBC);
-    out->xBC_x2 = melee_host_hsd_reader_u8(reader, root + 0xBE);
-    out->xBC_respawn = melee_host_hsd_reader_u8(reader, root + 0xBF);
-    out->xC0 = melee_host_hsd_reader_f32(reader, root + 0xC0);
-    out->xC4 = melee_host_hsd_reader_f32(reader, root + 0xC4);
-    out->xC8 = melee_host_hsd_reader_f32(reader, root + 0xC8);
-    out->xCC = melee_host_hsd_reader_f32(reader, root + 0xCC);
+    out->xBC_0_kind = melee_host_hsd_reader_u16(reader, root + 0xBC);
+    out->xBC_0_x2 = melee_host_hsd_reader_u8(reader, root + 0xBE);
+    out->xBC_0_respawn = melee_host_hsd_reader_u8(reader, root + 0xBF);
+    out->xBC_1_kind = melee_host_hsd_reader_u16(reader, root + 0xC0);
+    out->xBC_1_x2 = melee_host_hsd_reader_u8(reader, root + 0xC2);
+    out->xBC_1_respawn = melee_host_hsd_reader_u8(reader, root + 0xC3);
+    out->xBC_2_kind = melee_host_hsd_reader_u16(reader, root + 0xC4);
+    out->xBC_2_x2 = melee_host_hsd_reader_u8(reader, root + 0xC6);
+    out->xBC_2_respawn = melee_host_hsd_reader_u8(reader, root + 0xC7);
+    out->xBC_3_kind = melee_host_hsd_reader_u16(reader, root + 0xC8);
+    out->xBC_3_x2 = melee_host_hsd_reader_u8(reader, root + 0xCA);
+    out->xBC_3_respawn = melee_host_hsd_reader_u8(reader, root + 0xCB);
+    out->xBC_4_kind = melee_host_hsd_reader_u16(reader, root + 0xCC);
+    out->xBC_4_x2 = melee_host_hsd_reader_u8(reader, root + 0xCE);
+    out->xBC_4_respawn = melee_host_hsd_reader_u8(reader, root + 0xCF);
+    out->xBC_5_kind = melee_host_hsd_reader_u16(reader, root + 0xD0);
+    out->xBC_5_x2 = melee_host_hsd_reader_u8(reader, root + 0xD2);
+    out->xBC_5_respawn = melee_host_hsd_reader_u8(reader, root + 0xD3);
+    out->xBC_6_kind = melee_host_hsd_reader_u16(reader, root + 0xD4);
+    out->xBC_6_x2 = melee_host_hsd_reader_u8(reader, root + 0xD6);
+    out->xBC_6_respawn = melee_host_hsd_reader_u8(reader, root + 0xD7);
+    out->xBC_7_kind = melee_host_hsd_reader_u16(reader, root + 0xD8);
+    out->xBC_7_x2 = melee_host_hsd_reader_u8(reader, root + 0xDA);
+    out->xBC_7_respawn = melee_host_hsd_reader_u8(reader, root + 0xDB);
+    out->xBC_8_kind = melee_host_hsd_reader_u16(reader, root + 0xDC);
+    out->xBC_8_x2 = melee_host_hsd_reader_u8(reader, root + 0xDE);
+    out->xBC_8_respawn = melee_host_hsd_reader_u8(reader, root + 0xDF);
+    out->xBC_9_kind = melee_host_hsd_reader_u16(reader, root + 0xE0);
+    out->xBC_9_x2 = melee_host_hsd_reader_u8(reader, root + 0xE2);
+    out->xBC_9_respawn = melee_host_hsd_reader_u8(reader, root + 0xE3);
+    out->xBC_10_kind = melee_host_hsd_reader_u16(reader, root + 0xE4);
+    out->xBC_10_x2 = melee_host_hsd_reader_u8(reader, root + 0xE6);
+    out->xBC_10_respawn = melee_host_hsd_reader_u8(reader, root + 0xE7);
+    out->xBC_11_kind = melee_host_hsd_reader_u16(reader, root + 0xE8);
+    out->xBC_11_x2 = melee_host_hsd_reader_u8(reader, root + 0xEA);
+    out->xBC_11_respawn = melee_host_hsd_reader_u8(reader, root + 0xEB);
+    out->xBC_12_kind = melee_host_hsd_reader_u16(reader, root + 0xEC);
+    out->xBC_12_x2 = melee_host_hsd_reader_u8(reader, root + 0xEE);
+    out->xBC_12_respawn = melee_host_hsd_reader_u8(reader, root + 0xEF);
+    out->xBC_13_kind = melee_host_hsd_reader_u16(reader, root + 0xF0);
+    out->xBC_13_x2 = melee_host_hsd_reader_u8(reader, root + 0xF2);
+    out->xBC_13_respawn = melee_host_hsd_reader_u8(reader, root + 0xF3);
+    out->xBC_14_kind = melee_host_hsd_reader_u16(reader, root + 0xF4);
+    out->xBC_14_x2 = melee_host_hsd_reader_u8(reader, root + 0xF6);
+    out->xBC_14_respawn = melee_host_hsd_reader_u8(reader, root + 0xF7);
+    out->xBC_15_kind = melee_host_hsd_reader_u16(reader, root + 0xF8);
+    out->xBC_15_x2 = melee_host_hsd_reader_u8(reader, root + 0xFA);
+    out->xBC_15_respawn = melee_host_hsd_reader_u8(reader, root + 0xFB);
+    out->xBC_16_kind = melee_host_hsd_reader_u16(reader, root + 0xFC);
+    out->xBC_16_x2 = melee_host_hsd_reader_u8(reader, root + 0xFE);
+    out->xBC_16_respawn = melee_host_hsd_reader_u8(reader, root + 0xFF);
+    out->xBC_17_kind = melee_host_hsd_reader_u16(reader, root + 0x100);
+    out->xBC_17_x2 = melee_host_hsd_reader_u8(reader, root + 0x102);
+    out->xBC_17_respawn = melee_host_hsd_reader_u8(reader, root + 0x103);
+    out->xBC_18_kind = melee_host_hsd_reader_u16(reader, root + 0x104);
+    out->xBC_18_x2 = melee_host_hsd_reader_u8(reader, root + 0x106);
+    out->xBC_18_respawn = melee_host_hsd_reader_u8(reader, root + 0x107);
+    out->xBC_19_kind = melee_host_hsd_reader_u16(reader, root + 0x108);
+    out->xBC_19_x2 = melee_host_hsd_reader_u8(reader, root + 0x10A);
+    out->xBC_19_respawn = melee_host_hsd_reader_u8(reader, root + 0x10B);
+    out->xBC_20_kind = melee_host_hsd_reader_u16(reader, root + 0x10C);
+    out->xBC_20_x2 = melee_host_hsd_reader_u8(reader, root + 0x10E);
+    out->xBC_20_respawn = melee_host_hsd_reader_u8(reader, root + 0x10F);
+    out->xBC_21_kind = melee_host_hsd_reader_u16(reader, root + 0x110);
+    out->xBC_21_x2 = melee_host_hsd_reader_u8(reader, root + 0x112);
+    out->xBC_21_respawn = melee_host_hsd_reader_u8(reader, root + 0x113);
+    out->xBC_22_kind = melee_host_hsd_reader_u16(reader, root + 0x114);
+    out->xBC_22_x2 = melee_host_hsd_reader_u8(reader, root + 0x116);
+    out->xBC_22_respawn = melee_host_hsd_reader_u8(reader, root + 0x117);
+    out->xBC_23_kind = melee_host_hsd_reader_u16(reader, root + 0x118);
+    out->xBC_23_x2 = melee_host_hsd_reader_u8(reader, root + 0x11A);
+    out->xBC_23_respawn = melee_host_hsd_reader_u8(reader, root + 0x11B);
+    out->xBC_24_kind = melee_host_hsd_reader_u16(reader, root + 0x11C);
+    out->xBC_24_x2 = melee_host_hsd_reader_u8(reader, root + 0x11E);
+    out->xBC_24_respawn = melee_host_hsd_reader_u8(reader, root + 0x11F);
+    out->xBC_25_kind = melee_host_hsd_reader_u16(reader, root + 0x120);
+    out->xBC_25_x2 = melee_host_hsd_reader_u8(reader, root + 0x122);
+    out->xBC_25_respawn = melee_host_hsd_reader_u8(reader, root + 0x123);
+    out->xBC_26_kind = melee_host_hsd_reader_u16(reader, root + 0x124);
+    out->xBC_26_x2 = melee_host_hsd_reader_u8(reader, root + 0x126);
+    out->xBC_26_respawn = melee_host_hsd_reader_u8(reader, root + 0x127);
+    out->xBC_27_kind = melee_host_hsd_reader_u16(reader, root + 0x128);
+    out->xBC_27_x2 = melee_host_hsd_reader_u8(reader, root + 0x12A);
+    out->xBC_27_respawn = melee_host_hsd_reader_u8(reader, root + 0x12B);
+    out->xBC_28_kind = melee_host_hsd_reader_u16(reader, root + 0x12C);
+    out->xBC_28_x2 = melee_host_hsd_reader_u8(reader, root + 0x12E);
+    out->xBC_28_respawn = melee_host_hsd_reader_u8(reader, root + 0x12F);
+    out->xBC_29_kind = melee_host_hsd_reader_u16(reader, root + 0x130);
+    out->xBC_29_x2 = melee_host_hsd_reader_u8(reader, root + 0x132);
+    out->xBC_29_respawn = melee_host_hsd_reader_u8(reader, root + 0x133);
+    out->xBC_30_kind = melee_host_hsd_reader_u16(reader, root + 0x134);
+    out->xBC_30_x2 = melee_host_hsd_reader_u8(reader, root + 0x136);
+    out->xBC_30_respawn = melee_host_hsd_reader_u8(reader, root + 0x137);
+    out->xBC_31_kind = melee_host_hsd_reader_u16(reader, root + 0x138);
+    out->xBC_31_x2 = melee_host_hsd_reader_u8(reader, root + 0x13A);
+    out->xBC_31_respawn = melee_host_hsd_reader_u8(reader, root + 0x13B);
     return melee_host_hsd_reader_failed(reader) ? NULL : out;
 }
 

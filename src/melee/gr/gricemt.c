@@ -117,11 +117,12 @@ struct grIceMt_YakumonoParam {
     s16* xB4;
     s16 xB8;
     s16 pad;
-    grZakoGenerator_SpawnDesc xBC;
-    float xC0;
-    float xC4;
-    float xC8;
-    float xCC;
+    /* The block on disc runs to 0x13C, and everything from here on is spawn
+     * descriptors: kinds 46 and 217 repeating, then zeroes for the generator
+     * to stop on.  The four floats that used to stand in for this region were
+     * never read, and overlapped it.  0xBC + 32 * 4 == 0x13C, the extent the
+     * asset gives. */
+    grZakoGenerator_SpawnDesc xBC[32];
 };
 
 /* 1F6868 */ static void grIceMt_801F6868(GrDemoInitArg id);
@@ -577,7 +578,7 @@ void grIceMt_801F7080(void)
         Ground_801C2FE0(gobj);
     }
     if (Stage_80225194() == 76) {
-        grZakoGenerator_801CAE04(&yakumono_param->xBC);
+        grZakoGenerator_801CAE04(&yakumono_param->xBC[0]);
         if (rand_zero(yakumono_param->xB8)) {
             grZakoGenerator_801CAEB0(Ground_801C5840(), Ground_801C5940());
         }

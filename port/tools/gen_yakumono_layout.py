@@ -219,6 +219,9 @@ def parse_one(typ, name, count, is_ptr, offset, text, path):
 
 def parse_fields(body: str, text: str, path: str) -> list[dict]:
     """Flatten a struct body into scalar and pointer fields with disc offsets."""
+    # Offset comments are read separately; here any comment is noise, and a
+    # multi-line one would otherwise look like a field.
+    body = re.sub(r"/\*.*?\*/", " ", body, flags=re.S)
     fields = []
     offset = 0
     for raw in body.splitlines():
