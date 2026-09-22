@@ -190,8 +190,10 @@ typedef struct grZe_AcidState {
 
 #ifdef MELEE_HOST
 #define ZEBES_ACID(gp) ((grZe_AcidState*) (gp)->u.zebes5.acid_state)
+#define ZEBES_ACID4(gp) ((grZe_AcidState*) &(gp)->u.zebes4)
 #else
 #define ZEBES_ACID(gp) ((grZe_AcidState*) &(gp)->u.zebes5.xC8)
+#define ZEBES_ACID4(gp) ((grZe_AcidState*) &(gp)->u.zebes4)
 #endif
 
 GrJoint grZe_803E1A10[] = {
@@ -710,14 +712,31 @@ void grZebes_801D9100(HSD_GObj* gobj)
     gp->u.zebes4.xCC = 0.0f;
     gp->u.zebes4.xD0 = 0.0f;
     gp->u.zebes4.xD4 = 0.0f;
+    #ifdef MELEE_HOST
+    gp->u.zebes4.xD8 = child_jobj;
+#else
     gp->u.zebes4.xD8 = (u32) child_jobj;
+#endif
     new_var = 0xD;
+    #ifdef MELEE_HOST
+    gp->u.zebes4.xDC = Ground_801C3FA4(gobj, 0x11);
+#else
     gp->u.zebes4.xDC = (u32) Ground_801C3FA4(gobj, 0x11);
+#endif
+    #ifdef MELEE_HOST
+    gp->u.zebes4.xE0 = mat_gobj;
+#else
     gp->u.zebes4.xE0 = (u32) mat_gobj;
+#endif
     gp->u.zebes4.xE4 = new_var;
     gp->u.zebes4.xE8 = 0;
+#ifdef MELEE_HOST
+    gp->u.zebes4.xEC = grZakoGenerator_801CA394(
+        (void*) &grZe_803E1C80, 4, (void*) grZebes_801DCBB0, 1.0f);
+#else
     gp->u.zebes4.xEC = (u32) grZakoGenerator_801CA394(
         (void*) &grZe_803E1C80, 4, (void*) grZebes_801DCBB0, 1.0f);
+#endif
     Ground_801C2FE0(new_var2);
 }
 
@@ -730,7 +749,7 @@ void grZebes_801D925C(HSD_GObj* gobj)
 {
     HSD_JObj* jobj;
     Ground* gp = GET_GROUND(gobj);
-    s32 result = grZebes_801DA528(gobj, &gp->u.zebes4, 1, 2);
+    s32 result = grZebes_801DA528(gobj, ZEBES_ACID4(gp), 1, 2);
 
     if (gp->u.zebes4.xE8 != result) {
         gp->u.zebes4.xE8 = result;
@@ -1227,7 +1246,11 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 {
     Ground* gp = GET_GROUND(gobj);
     HSD_LObj* lobj = (HSD_LObj*) gp->u.zebes4.xDC;
+#ifdef MELEE_HOST
+    gp->u.zebes4.xDC = lobj;
+#else
     gp->u.zebes4.xDC = (u32) lobj;
+#endif
     if (lobj == NULL) {
         HSD_GObj* lgobj = HSD_GObjGXLinkHead[4];
         if (lgobj != NULL) {
@@ -1239,7 +1262,11 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
                 lobj = HSD_LObjGetNext(lobj);
             }
         }
-        gp->u.zebes4.xDC = (u32) lobj;
+    #ifdef MELEE_HOST
+    gp->u.zebes4.xDC = lobj;
+#else
+    gp->u.zebes4.xDC = (u32) lobj;
+#endif
     }
 
     if (lobj != NULL) {

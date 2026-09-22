@@ -984,6 +984,17 @@ struct grZebes_GroundVars3 {
     /*  +4 gp+C8 */ s32 xC8;
 };
 
+/* grzebes.c reads grZebes_GroundVars4 as its acid state, and writes the same
+ * bytes through these named fields.  Four of them hold addresses -- two
+ * joints, the material GObj and a zako generator -- which a u32 keeps whole
+ * only where pointers are four bytes.  Widening them also lines the struct up
+ * with grZe_AcidState on the host, so xE8 and xEC stop landing inside it. */
+#ifdef MELEE_HOST
+#define MELEE_HOST_PTR(host_type, console_type) host_type
+#else
+#define MELEE_HOST_PTR(host_type, console_type) console_type
+#endif
+
 struct grZebes_GroundVars4 {
     /* +00 gp+C4 */ u8 xC4;
     /* +01 gp+C5 */ u8 xC5;
@@ -992,13 +1003,13 @@ struct grZebes_GroundVars4 {
     /* +08 gp+CC */ f32 xCC;
     /* +0C gp+D0 */ f32 xD0;
     /* +10 gp+D4 */ f32 xD4;
-    /* +14 gp+D8 */ u32 xD8;
-    /* +18 gp+DC */ u32 xDC;
-    /* +1C gp+E0 */ u32 xE0;
+    /* +14 gp+D8 */ MELEE_HOST_PTR(HSD_JObj*, u32) xD8;
+    /* +18 gp+DC */ MELEE_HOST_PTR(void*, u32) xDC;
+    /* +1C gp+E0 */ MELEE_HOST_PTR(HSD_GObj*, u32) xE0;
     /* +20 gp+E4 */ s16 xE4;
     /* +22 gp+E6 */ s16 xE6;
     /* +24 gp+E8 */ s32 xE8;
-    /* +28 gp+EC */ u32 xEC;
+    /* +28 gp+EC */ MELEE_HOST_PTR(void*, u32) xEC;
 };
 
 struct grZebes_GroundVars5 {
