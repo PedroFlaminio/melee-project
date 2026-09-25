@@ -1,7 +1,16 @@
 #include "test.hpp"
 
+#include <melee_host/boot.h>
 #include <melee_host/local_match.h>
 #include <melee_host/match_rules.h>
+
+TEST_CASE("the measured playable-stage gate includes every passing stage")
+{
+    REQUIRE(melee_host_stage_is_playable(16)); // Yoshi's Island
+    REQUIRE(melee_host_stage_is_playable(20)); // Mushroom Kingdom II
+    REQUIRE(!melee_host_stage_is_playable(-1));
+    REQUIRE(!melee_host_stage_is_playable(255));
+}
 
 TEST_CASE("native VS start data prepares a local two-player match")
 {

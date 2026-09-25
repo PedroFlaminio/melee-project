@@ -30,12 +30,14 @@ std::array<int, 4> evaluate_tev(const MeleeHostGxTevState& tev,
                                 const TevFragmentInputs& inputs);
 
 /* The normalized s/t displacement an indirect TEV stage applies after its
- * indirect texture was sampled as 8-bit RGBA.  This is the numeric reference
- * for the matching GLSL emission; a stage that is direct, disabled or names
- * an invalid input returns zero. */
+ * indirect texture was sampled as 8-bit RGBA. `direct_coord` supplies the
+ * unmodified normalized coordinate needed by GX_ITM_Sn/GX_ITM_Tn. This is the
+ * numeric reference for the matching GLSL emission; a stage that is direct,
+ * disabled or names an invalid input returns zero. */
 std::array<float, 2> indirect_texture_offset(
     const MeleeHostGxIndirectState& indirect, std::size_t tev_stage,
-    const std::array<int, 4>& texel);
+    const std::array<int, 4>& texel,
+    const std::array<float, 2>& direct_coord = {});
 
 /* Both alpha comparisons and the logic that combines them, against the alpha
  * the TEV produced.  No reduction: every GXAlphaOp is evaluated as written. */

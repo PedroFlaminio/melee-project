@@ -944,13 +944,13 @@ static void* yakumono_mutecity(MeleeHostHsdReader* reader, mh_u32 root)
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x8, &target)) {
         out->x8 =
-            melee_host_hsd_reader_command_stream(reader, target);
+            stage_dynamics_desc(reader, target);
     } else {
         out->x8 = NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0xC, &target)) {
         out->xC =
-            melee_host_hsd_reader_command_stream(reader, target);
+            stage_dynamics_desc(reader, target);
     } else {
         out->xC = NULL;
     }
@@ -1281,19 +1281,19 @@ static void* yakumono_icemt(MeleeHostHsdReader* reader, mh_u32 root)
     out->xA8 = (mh_s16) melee_host_hsd_reader_u16(reader, root + 0xA8);
     if (melee_host_hsd_reader_pointer(reader, root + 0xAC, &target)) {
         out->field_ixs =
-            melee_host_hsd_reader_command_stream(reader, target);
+            stage_s16_array(reader, target);
     } else {
         out->field_ixs = NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0xB0, &target)) {
         out->xB0 =
-            melee_host_hsd_reader_command_stream(reader, target);
+            stage_s16_array(reader, target);
     } else {
         out->xB0 = NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0xB4, &target)) {
         out->xB4 =
-            melee_host_hsd_reader_command_stream(reader, target);
+            stage_s16_array(reader, target);
     } else {
         out->xB4 = NULL;
     }

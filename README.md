@@ -30,8 +30,10 @@ decompilation-based ports such as *Ship of Harkinian*.
 
 ## Building
 
-Requirements: CMake 3.25 or newer, Ninja, a C17/C++20 compiler, and SDL2 with an OpenGL
-driver for the windowed build.
+Requirements: CMake 3.25 or newer, Ninja, a C17/C++20 compiler, and an OpenGL
+driver. CMake uses an installed SDL3 when available and otherwise downloads a static SDL3
+for the windowed build. Python 3.10 or newer is required by the asset tools and by the
+Windows first-run extractor.
 
 ```sh
 cmake --preset host-debug          # configure
@@ -42,6 +44,7 @@ ctest --preset host-debug          # run the test suite
 The release preset builds the playable executable:
 
 ```sh
+cmake --preset host-release
 cmake --build --preset host-release --target melee-pc
 ./build/host-release/port/melee-pc --play assets-local
 ```
@@ -49,7 +52,9 @@ cmake --build --preset host-release --target melee-pc
 `assets-local/` is the resource folder extracted from your own disc image; it is never
 committed. Presets for Clang on Visual Studio (`host-debug-windows`,
 `host-release-windows`) and for an ASan/UBSan build (`host-sanitize`) are defined in
-`CMakePresets.json`.
+`CMakePresets.json`. Windows builds copy the extractor beside `melee-pc`; on first run the
+setup window accepts a GALE01 NTSC-U 1.02 ISO/GCM and verifies the extracted manifest,
+DVD index, and `main.dol` hash before starting the game.
 
 ## Documentation
 

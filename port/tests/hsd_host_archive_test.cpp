@@ -1328,6 +1328,10 @@ TEST_CASE("a stage's map_head translates with its lights shared by address")
 extern "C" int melee_host_test_check_stage_extras(void* plit, void* quake,
                                                   void* items, char* message,
                                                   std::size_t size);
+extern "C" void melee_host_test_set_stage_grkind(int grkind);
+extern "C" int melee_host_test_check_icemt_yakumono(void* translated,
+                                                     char* message,
+                                                     std::size_t size);
 
 TEST_CASE("a stage's map_plit, quake_model_set and itemdata translate")
 {
@@ -1414,6 +1418,40 @@ TEST_CASE("a stage's ALDYakuAll and yakumono_param translate")
             nullptr);
     REQUIRE(melee_host_hsd_archive_release(unknown_bytes.data()) ==
             MELEE_HOST_OK);
+}
+
+TEST_CASE("Icicle's yakumono s16 tables translate as values, not commands")
+{
+    // The three pointed-to lists precede the 0x13C-byte parameter record so
+    // their archive extents give exact element counts.  In particular, the
+    // first sequence must remain 0,1,2,3,4 on a little-endian host.
+    constexpr std::uint32_t root = 0x50;
+    ArchiveBuilder builder(root + 0x13C);
+    for (std::uint32_t i = 0; i < 16; ++i) {
+        builder.u16(i * 2, static_cast<std::uint16_t>(i));
+    }
+    builder.u16(0x20, static_cast<std::uint16_t>(-3));
+    builder.u16(0x22, 0x1234);
+    builder.u16(0x38, 200);
+    builder.u16(0x3A, static_cast<std::uint16_t>(-200));
+    builder.pointer(root + 0xAC, 0x00);
+    builder.pointer(root + 0xB0, 0x20);
+    builder.pointer(root + 0xB4, 0x38);
+    builder.public_symbol(root, "yakumono_param");
+    std::vector<std::byte> bytes = builder.build();
+
+    melee_host_game_register_data_translators();
+    melee_host_test_set_stage_grkind(22); // GrKind_Icemt
+    HSD_Archive archive{};
+    REQUIRE(HSD_ArchiveParse(&archive, bytes_of(bytes), bytes.size()) == 0);
+    void* const params =
+        HSD_ArchiveGetPublicAddress(&archive, "yakumono_param");
+    REQUIRE(params != nullptr);
+    char message[256] = {};
+    REQUIRE(melee_host_test_check_icemt_yakumono(params, message,
+                                                  sizeof(message)) == 1);
+    REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
+    melee_host_test_set_stage_grkind(-1);
 }
 
 extern "C" int melee_host_test_check_fighter_common_data(void* translated,

@@ -13,6 +13,8 @@
 
 #include <melee_host/types.h>
 
+struct DynamicsDesc;
+
 /* grcastle.c: struct grCastle_YakumonoParam */
 struct melee_host_yakumono_castle {
     /* 0x000 */ mh_s16 x0;
@@ -522,8 +524,8 @@ struct melee_host_yakumono_pstadium {
 struct melee_host_yakumono_mutecity {
     /* 0x000 */ void* x0;
     /* 0x004 */ void* x4;
-    /* 0x008 */ void* x8;
-    /* 0x00C */ void* xC;
+    /* 0x008 */ struct DynamicsDesc* x8;
+    /* 0x00C */ struct DynamicsDesc* xC;
     /* 0x010 */ mh_u8 pad10[28];
     /* 0x02C */ mh_f32 x2C;
     /* 0x030 */ mh_f32 x30;
@@ -724,9 +726,9 @@ struct melee_host_yakumono_icemt {
     /* 0x0A4 */ mh_s16 xA4;
     /* 0x0A6 */ mh_s16 xA6;
     /* 0x0A8 */ mh_s16 xA8;
-    /* 0x0AC */ void* field_ixs;
-    /* 0x0B0 */ void* xB0;
-    /* 0x0B4 */ void* xB4;
+    /* 0x0AC */ mh_s16* field_ixs;
+    /* 0x0B0 */ mh_s16* xB0;
+    /* 0x0B4 */ mh_s16* xB4;
     /* 0x0B8 */ mh_s16 xB8;
     /* 0x0BA */ mh_s16 pad;
     /* 0x0BC */ mh_u16 xBC_0_kind;

@@ -26,25 +26,12 @@ import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
+STAGE_STATUS = REPO / "port/data/stage_status.json"
 
-# The stage kinds mnStageSel_803F06D0 offers, in the select screen's order.
-# Kept here rather than parsed so the sweep runs without the game's headers;
-# --stages overrides it when the table changes.
-STAGE_KINDS = [4, 11, 5, 12, 13, 14, 8, 16, 2, 17, 7, 22, 6, 15, 9, 18,
-               10, 24, 3, 23, 19, 20, 25, 27, 31, 32, 28, 29, 30, 0]
-
-STAGE_NAMES = {  # StKind, from src/melee/gr/types.h
-    0: "Dummy/random", 2: "Fountain of Dreams", 3: "Pokemon Stadium",
-    4: "Princess Peach's Castle", 5: "Kongo Jungle", 6: "Brinstar",
-    7: "Corneria", 8: "Yoshi's Story", 9: "Onett", 10: "Mute City",
-    11: "Rainbow Cruise", 12: "Jungle Japes", 13: "Great Bay",
-    14: "Hyrule Temple", 15: "Brinstar Depths", 16: "Yoshi's Island",
-    17: "Green Greens", 18: "Fourside", 19: "Mushroom Kingdom",
-    20: "Mushroom Kingdom II", 22: "Venom", 23: "Poke Floats", 24: "Big Blue",
-    25: "Icicle Mountain", 27: "Flat Zone", 28: "Dream Land N64",
-    29: "Yoshi's Island N64", 30: "Kongo Jungle N64", 31: "Battlefield",
-    32: "Final Destination",
-}
+with STAGE_STATUS.open(encoding="utf-8") as stage_status_file:
+    _stage_status = json.load(stage_status_file)["stages"]
+STAGE_KINDS = [stage["kind"] for stage in _stage_status]
+STAGE_NAMES = {stage["kind"]: stage["name"] for stage in _stage_status}
 
 # The menu route to the stage select, with two ports taking Fox.  The stage
 # select opens on frame 384; STAGE lands a few frames later and the match
@@ -130,6 +117,30 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
     return report
 
 
+def repeated_attempts(run_one, repeat: int, fail_fast: bool) -> list[dict]:
+    """Run exactly `repeat` times unless the caller explicitly asks to stop."""
+    attempts = []
+    for _ in range(repeat):
+        attempt = run_one()
+        attempts.append(attempt)
+        if fail_fast and attempt["status"] != "ok":
+            break
+    return attempts
+
+
+def summarize_attempts(attempts: list[dict], requested: int) -> dict:
+    """Keep a representative status and every underlying attempt."""
+    representative = next((a for a in attempts if a["status"] != "ok"),
+                          attempts[0])
+    report = dict(representative)
+    report["requested_attempts"] = requested
+    report["completed_attempts"] = len(attempts)
+    report["passed"] = sum(1 for attempt in attempts
+                           if attempt["status"] == "ok")
+    report["attempts"] = attempts
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -141,12 +152,17 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", help="write one JSON line a stage here")
     ap.add_argument("--repeat", type=int, default=1,
-                    help="how many times a stage must load before it counts.  A route freezes the clock, so a stage that loads only sometimes is reading something that moves with the address layout -- setarch -R makes such a run repeatable while you chase it.")
+                    help="how many times every stage is run; it passes only if all attempts pass")
+    ap.add_argument("--fail-fast", action="store_true",
+                    help="stop repeating a stage after its first failed attempt")
     ap.add_argument("--no-audio", action="store_true",
                     help="run with MELEE_HOST_AUDIO=0.  Off by default simply because the voices are on in a real run.")
     ap.add_argument("--log-lines", type=int, default=25,
                     help="lines of output kept for a broken run; a\n                          sanitizer report needs more")
     args = ap.parse_args()
+
+    if args.repeat < 1:
+        ap.error("--repeat must be at least 1")
 
     binary = (REPO / args.binary).resolve()
     if not binary.exists():
@@ -157,20 +173,14 @@ def main() -> int:
     results = []
     broken = []
     for kind in kinds:
-        attempts = []
-        for _ in range(max(1, args.repeat)):
-            attempts.append(run_stage(binary, args.root, kind, args.frames,
-                                      args.timeout, args.log_lines,
-                                      args.no_audio))
-            if attempts[-1]["status"] != "ok":
-                break
-        report = next((a for a in attempts if a["status"] != "ok"),
-                      attempts[0])
-        report["attempts"] = len(attempts)
-        report["passed"] = sum(1 for a in attempts if a["status"] == "ok")
+        attempts = repeated_attempts(
+            lambda: run_stage(binary, args.root, kind, args.frames,
+                              args.timeout, args.log_lines, args.no_audio),
+            args.repeat, args.fail_fast)
+        report = summarize_attempts(attempts, args.repeat)
         results.append(report)
         mark = "ok  " if report["status"] == "ok" else "BAD "
-        runs = (f" [{report['passed']}/{report['attempts']}]"
+        runs = (f" [{report['passed']}/{report['completed_attempts']}]"
                 if args.repeat > 1 else "")
         print(f"{mark}{kind:>3} {report['name']:<24} {report['status']:<8}"
               f"{runs} {report['detail'][:64]}", flush=True)

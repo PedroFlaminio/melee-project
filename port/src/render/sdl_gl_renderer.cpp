@@ -73,6 +73,7 @@ namespace melee::render {
         MELEE_GL_FUNCTION(PFNGLUNIFORM1IPROC, glUniform1i);
         MELEE_GL_FUNCTION(PFNGLUNIFORM1IVPROC, glUniform1iv);
         MELEE_GL_FUNCTION(PFNGLUNIFORM2FPROC, glUniform2f);
+        MELEE_GL_FUNCTION(PFNGLUNIFORM3FVPROC, glUniform3fv);
         MELEE_GL_FUNCTION(PFNGLUNIFORM4IPROC, glUniform4i);
         MELEE_GL_FUNCTION(PFNGLUNIFORM4IVPROC, glUniform4iv);
         MELEE_GL_FUNCTION(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv);
@@ -126,6 +127,7 @@ namespace melee::render {
             MELEE_LOAD_GL(PFNGLUNIFORM1IPROC, glUniform1i)
             MELEE_LOAD_GL(PFNGLUNIFORM1IVPROC, glUniform1iv)
             MELEE_LOAD_GL(PFNGLUNIFORM2FPROC, glUniform2f)
+            MELEE_LOAD_GL(PFNGLUNIFORM3FVPROC, glUniform3fv)
             MELEE_LOAD_GL(PFNGLUNIFORM4IPROC, glUniform4i)
             MELEE_LOAD_GL(PFNGLUNIFORM4IVPROC, glUniform4iv)
             MELEE_LOAD_GL(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)
@@ -173,6 +175,7 @@ namespace melee::render {
 #define glUniform1i melee_glUniform1i
 #define glUniform1iv melee_glUniform1iv
 #define glUniform2f melee_glUniform2f
+#define glUniform3fv melee_glUniform3fv
 #define glUniform4i melee_glUniform4i
 #define glUniform4iv melee_glUniform4iv
 #define glUniformMatrix4fv melee_glUniformMatrix4fv

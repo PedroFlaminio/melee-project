@@ -37,7 +37,7 @@ An area at 100% in the MVP table can sit well below that here.
 | Determinism and fidelity | 10% | 35% | The canonical `TRACE=` trace is identical across runs, across hours and between `host-debug` and `-O2`. That is self-consistency, not equivalence: nothing has been compared against the DOL in Dolphin. `atanf`, `sinf`, `cosf`, `tanf`, `sqrtf`, `sqrt` and `fmodf` still come from `libm`, and `__frsqrte` is the exact `1.0 / sqrt(x)` where the console uses a table estimate, so Newton-refined roots can differ in the last bits. |
 | Presentation and settings | 5% | 50% | The Esc overlay works and persists: internal resolution, aspect, upscaling filter, window mode, presentation rate, MSAA, anisotropy, custom textures, FPS counter. Gaps: the high rates re-present the same frame — no visual interpolation is implemented — and input and audio latency have not been measured. |
 | Saves and memory card (CARD) | 5% | 5% | Stubbed absent: `CARDProbe` answers no card in either slot (`port/src/os/absent_devices.c`). The real path keeps addresses in 32 bits in four `lb_8001*` functions, the task's `unk_18`/`unk_1C` and `hsd_3A94.c`'s command queue, which converts pointers to `s32` 14 times. Without a card only 14 characters and the starting stages are unlocked. |
-| Platform coverage | 4% | 40% | Linux is the development platform. Windows MSVC and macOS Clang build and test in CI, and there are Clang-on-Visual-Studio presets, but the renderer resolves GL 2.0+ through `GL_GLEXT_PROTOTYPES`, which only works on Linux, so the window has not run on either. ARM64 is untouched. |
+| Platform coverage | 4% | 40% | Linux is the development platform. Windows MSVC and macOS Clang build and test in CI, and there are Clang-on-Visual-Studio presets. Windows now resolves every GL 2.0+ entry point it uses through `SDL_GL_GetProcAddress`, but the window still needs a runtime smoke test there. ARM64 is untouched. |
 | Cutscenes (THP) | 3% | 0% | Not started. THP appears only as a named stop in `unported.c`. |
 
 Weighted total: 45.2%, reported as 45%.
@@ -130,25 +130,12 @@ path in the engine to unwind a half-built stage. A stage asked for another way �
 `FRAME:STAGE`, or a mode that sets `force_stage_id` — still loads and still stops loudly, so
 this hides nothing from the sweep.
 
-**What is left, with a named cause each.** A sanitizer sweep on 21 September 2026
-(`sweep_stages.py --binary build/host-sanitize/port/melee-pc`) gave every remaining stage a
-file and line:
-
-| Stage | Cause, after the 21–22 September fixes |
-| --- | --- |
-| 2 Fountain of Dreams | SIGSEGV — *was* `image_desc`, now translated |
-
-| 5 Kongo Jungle | SEGV in `HSD_JObjSetRotationZ`, from `grKongo_801D77E0` |
-| 6 Brinstar | SIGSEGV; three truncations fixed so far (acid-state overlay, xF0, xFC, x100) and the chain continues |
-| 8 Yoshi's Story | `item.c:576`, stage item kind 210 has no attribute translator |
-| 10 Mute City | SIGBUS — *was* `HSD_FObjLoadDesc`, fixed |
-| 11 Rainbow Cruise | SEGV at `grrcruise.c:767` — *was* a console-sized allocation, fixed |
-| 13 Great Bay | `item.c:576`, stage item kind 221 has no attribute translator |
-
-
-| 22 Venom | SEGV — *was* `HSD_FObjLoadDesc`, fixed |
-| 24 Big Blue | SEGV in `grBigBlue_801ED694` — *was* a console-sized allocation, fixed |
-| 25 Icicle Mountain | address-dependent — *was* a wrong layout; `xBC` is an array of 32 spawn descriptors, verified against the asset |
+**What is left.** The canonical measured result is
+[`port/data/stage_status.json`](../port/data/stage_status.json): 17 of the 30 select-screen
+entries pass every requested attempt. It generates the game's allowlist and also supplies the
+sweep's order and names, so those two paths cannot silently disagree. Failure details belong
+to the JSON-lines artifact written by `sweep_stages.py --results`; they are deliberately not
+copied into this document, where they had become stale after their fixes landed.
 
 **Several stages crash only on some runs, and it is the address layout.** The scripted
 routes freeze the clock, so a run-to-run difference cannot come from the game. Princess
@@ -158,8 +145,9 @@ fails two of six. Under the sanitizers it is `grcastle.c:1525`, reading
 a bitfield, an `s16` pair and one address kept in a `u32` — so two of the three slots were
 never pointers. That aliasing wants understanding before it is touched.
 
-`sweep_stages.py --repeat N` counts a stage only if it loads every run, which is why the
-figure here is 17 rather than the 19 a single pass reports. `setarch -R` makes such a run
+`sweep_stages.py --repeat N` now executes exactly N attempts and counts a stage only if all
+pass, which is why the figure here is 17 rather than the 19 a single pass reports. Use
+`--fail-fast` only for a shorter diagnostic run. `setarch -R` makes an address-dependent run
 repeatable while chasing one.
 
 An earlier note here blamed `MELEE_HOST_AUDIO=0` for this. That was wrong: the runs that

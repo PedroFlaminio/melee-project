@@ -2,6 +2,7 @@
  * translated from the archive hsd_host_archive_test.cpp builds, which C++
  * cannot include the stage headers to read. */
 
+#include <melee/gr/ground.h>
 #include <melee/gr/types.h>
 #include <melee/mp/types.h>
 #include <melee/sc/types.h>
@@ -10,12 +11,17 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "game/yakumono_param.h"
+
 int melee_host_test_check_stage_map_head(void* translated, char* message,
                                          size_t size);
 int melee_host_test_check_stage_coll_data(void* translated, char* message,
                                           size_t size);
 int melee_host_test_check_stage_extras(void* plit, void* quake, void* items,
                                        char* message, size_t size);
+void melee_host_test_set_stage_grkind(int grkind);
+int melee_host_test_check_icemt_yakumono(void* translated, char* message,
+                                         size_t size);
 
 /* ground.c declares these records locally; game_data_translators.c keeps the
  * same declarations. */
@@ -43,6 +49,27 @@ typedef struct CheckStagePairs {
             return 0;                                                         \
         }                                                                     \
     } while (0)
+
+void melee_host_test_set_stage_grkind(int grkind)
+{
+    stage_info.grkind = grkind;
+}
+
+int melee_host_test_check_icemt_yakumono(void* translated, char* message,
+                                         size_t size)
+{
+    const struct melee_host_yakumono_icemt* const params = translated;
+
+    CHECK(params != NULL);
+    CHECK(params->field_ixs != NULL);
+    CHECK(params->field_ixs[0] == 0 && params->field_ixs[1] == 1);
+    CHECK(params->field_ixs[2] == 2 && params->field_ixs[4] == 4);
+    CHECK(params->xB0 != NULL && params->xB0[0] == -3 &&
+          params->xB0[1] == 0x1234);
+    CHECK(params->xB4 != NULL && params->xB4[0] == 200 &&
+          params->xB4[1] == -200);
+    return 1;
+}
 
 int melee_host_test_check_stage_coll_data(void* translated, char* message,
                                           size_t size)

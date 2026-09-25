@@ -114,9 +114,35 @@ COMPOSITES = {
 }
 POINTER_RE = re.compile(r"\*\s*$")
 
+# Pointer fields are not interchangeable.  `void*` fields in these structs
+# are the stage colour-animation command streams, but Icicle also stores s16
+# tables and Mute City stores DynamicsDesc records.  Guessing from the pointer
+# width corrupts those objects on little-endian hosts, so every supported
+# pointee type has an explicit translator.
+POINTER_TYPES = {
+    "void": ("command_stream", "void*"),
+    "s16": ("s16_array", "mh_s16*"),
+    "short": ("s16_array", "mh_s16*"),
+    "DynamicsDesc": ("dynamics_desc", "struct DynamicsDesc*"),
+}
+
 
 class Unsupported(Exception):
     pass
+
+
+def pointer_field(typ: str, name: str, offset: int, count: int, path: str):
+    """Describe a pointer whose pointee has a known host translation."""
+    base = typ.replace("struct ", "")
+    try:
+        pointer_kind, ctype = POINTER_TYPES[base]
+    except KeyError as exc:
+        raise Unsupported(
+            f"{path}: pointer field {name} has unsupported pointee {typ}"
+        ) from exc
+    offset = (offset + 3) // 4 * 4
+    return dict(kind="pointer", pointer_kind=pointer_kind, name=name,
+                offset=offset, count=count, ctype=ctype), offset + 4 * count
 
 
 def find_struct_body(text: str, spec: str, path: str) -> tuple[str, str]:
@@ -205,9 +231,7 @@ def parse_one(typ, name, count, is_ptr, offset, text, path):
     """One field: its record and the offset just past it."""
     typ = " ".join(typ.split())
     if is_ptr:
-        offset = (offset + 3) // 4 * 4
-        return dict(kind="pointer", name=name, offset=offset, count=count,
-                    ctype="void*"), offset + 4 * count
+        return pointer_field(typ, name, offset, count, path)
     base = typ.replace("struct ", "")
     if base in SCALARS:
         width, reader = SCALARS[base]
@@ -258,14 +282,8 @@ def parse_fields(body: str, text: str, path: str) -> list[dict]:
             count *= c
 
         if is_ptr:
-            # Every pointer in these structs is a colour-animation command
-            # script handed to grMaterial_801C9604; the reader materializes it
-            # the same way Battlefield's overlays already are.
-            align = 4
-            offset = (offset + align - 1) // align * align
-            fields.append(dict(kind="pointer", name=name, offset=offset,
-                               count=count, ctype="void*"))
-            offset += 4 * count
+            field, offset = pointer_field(typ, name, offset, count, path)
+            fields.append(field)
             continue
 
         base = typ.replace("struct ", "")
@@ -409,7 +427,8 @@ def emit_struct(stage) -> str:
     for f in stage["fields"]:
         arr = f"[{f['count']}]" if f["count"] > 1 else ""
         if f["kind"] == "pointer":
-            lines.append(f"    /* 0x{f['offset']:03X} */ void* {f['name']}{arr};")
+            lines.append(f"    /* 0x{f['offset']:03X} */ "
+                         f"{f['ctype']} {f['name']}{arr};")
         else:
             lines.append(f"    /* 0x{f['offset']:03X} */ "
                          f"{READERS[f['reader']][0]} {f['name']}{arr};")
@@ -448,11 +467,18 @@ def emit_translator(stage) -> str:
             idx = f"[{i}]" if f["count"] > 1 else ""
             if f["kind"] == "pointer":
                 off = f["offset"] + 4 * i
+                builders = {
+                    "command_stream":
+                        "melee_host_hsd_reader_command_stream(reader, target)",
+                    "s16_array": "stage_s16_array(reader, target)",
+                    "dynamics_desc": "stage_dynamics_desc(reader, target)",
+                }
+                build = builders[f["pointer_kind"]]
                 out += [
                     f"    if (melee_host_hsd_reader_pointer(reader, "
                     f"root + 0x{off:X}, &target)) {{",
                     f"        out->{f['name']}{idx} =",
-                    f"            melee_host_hsd_reader_command_stream(reader, target);",
+                    f"            {build};",
                     "    } else {",
                     f"        out->{f['name']}{idx} = NULL;",
                     "    }"]
@@ -479,7 +505,8 @@ def emit(done) -> tuple[str, str]:
 
     head = [banner, "#ifndef MELEE_HOST_YAKUMONO_PARAM_H",
             "#define MELEE_HOST_YAKUMONO_PARAM_H", "",
-            "#include <melee_host/types.h>", ""]
+            "#include <melee_host/types.h>", "",
+            "struct DynamicsDesc;", ""]
     for s in structs:
         head += [emit_struct(s), ""]
     head += ["#endif", ""]

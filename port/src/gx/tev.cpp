@@ -315,7 +315,8 @@ std::array<int, 4> evaluate_tev(const MeleeHostGxTevState& tev,
 
 std::array<float, 2> indirect_texture_offset(
     const MeleeHostGxIndirectState& indirect, std::size_t tev_stage,
-    const std::array<int, 4>& texel)
+    const std::array<int, 4>& texel,
+    const std::array<float, 2>& direct_coord)
 {
     if (tev_stage >= MELEE_HOST_GX_MAX_TEVSTAGE ||
         !indirect.tev_stages[tev_stage].indirect ||
@@ -342,14 +343,26 @@ std::array<float, 2> indirect_texture_offset(
         config.bias == 7) {
         value[2] -= center;
     }
-    if (config.matrix < 1 || config.matrix > 3) {
-        return { static_cast<float>(value[0]) / 256.0F,
-                 static_cast<float>(value[1]) / 256.0F };
+    if (config.matrix == 0) { /* GX_ITM_OFF */
+        return {};
     }
+    const bool regular = config.matrix >= 1 && config.matrix <= 3;
+    const bool s_matrix = config.matrix >= 5 && config.matrix <= 7;
+    const bool t_matrix = config.matrix >= 9 && config.matrix <= 11;
+    if (!regular && !s_matrix && !t_matrix) {
+        return {};
+    }
+    const std::size_t matrix_index = (config.matrix & 3U) - 1U;
     const MeleeHostGxIndirectMatrix& matrix =
-        indirect.matrices[config.matrix - 1U];
+        indirect.matrices[matrix_index];
     const float scale = std::exp2(static_cast<float>(matrix.scale_exp)) /
                         256.0F;
+    if (s_matrix || t_matrix) {
+        const float component =
+            static_cast<float>(value[t_matrix ? 1U : 0U]);
+        return { direct_coord[0] * component * scale,
+                 direct_coord[1] * component * scale };
+    }
     std::array<float, 2> result{};
     for (std::size_t row = 0; row < result.size(); ++row) {
         for (std::size_t column = 0; column < value.size(); ++column) {
@@ -722,6 +735,25 @@ ivec4 sample_texmap(int texmap, vec3 coord)
     return raw;
 }
 
+ivec4 sample_texmap_raw_lod(int texmap, vec3 coord, vec3 lod_coord)
+{
+    float q = coord.z == 0.0 ? 1.0 : coord.z;
+    float lod_q = lod_coord.z == 0.0 ? 1.0 : lod_coord.z;
+    vec2 lod_uv = lod_coord.xy / lod_q;
+    return ivec4(round(textureGrad(u_texmap[texmap], coord.xy / q,
+                                  dFdx(lod_uv), dFdy(lod_uv)) * 255.0));
+}
+
+ivec4 sample_texmap_lod(int texmap, vec3 coord, vec3 lod_coord)
+{
+    ivec4 raw = sample_texmap_raw_lod(texmap, coord, lod_coord);
+    if (u_texmap_format[texmap] == 17 || u_texmap_format[texmap] == 19 ||
+        u_texmap_format[texmap] == 22) {
+        return ivec4(raw.r);
+    }
+    return raw;
+}
+
 void main()
 {
     ivec4 raster0 = ivec4(round(clamp(v_color0, 0.0, 1.0) * 255.0));
@@ -738,6 +770,7 @@ void main()
     code += "    ivec4 last_texel_raw = ivec4(0);\n";
     code += "    int last_texmap = -1;\n";
     code += "    vec2 indirect_previous = vec2(0.0);\n";
+    code += "    int alpha_bump = 0;\n";
     for (std::size_t index = 0; index < stages; ++index) {
         const MeleeHostGxTevStage& stage = tev.stages[index];
         code += "    // stage " + std::to_string(index) + "\n    {\n";
@@ -771,6 +804,25 @@ void main()
                 } else {
                     code += "        ivec3 indirect_texel = ivec3(0);\n";
                 }
+                if (config.alpha_select >= 1 && config.alpha_select <= 3) {
+                    constexpr std::array<const char*, 3> component{
+                        "r", "g", "b"
+                    };
+                    const char* selected = component[config.alpha_select - 1U];
+                    if (config.format == 1) { /* GX_ITF_5 */
+                        code += "        alpha_bump = (indirect_texel." +
+                                std::string(selected) + " & 31) << 3;\n";
+                    } else if (config.format == 2) { /* GX_ITF_4 */
+                        code += "        alpha_bump = (indirect_texel." +
+                                std::string(selected) + " & 15) << 4;\n";
+                    } else if (config.format == 3) { /* GX_ITF_3 */
+                        code += "        alpha_bump = (indirect_texel." +
+                                std::string(selected) + " & 7) << 5;\n";
+                    } else { /* GX_ITF_8 */
+                        code += "        alpha_bump = indirect_texel." +
+                                std::string(selected) + " & 248;\n";
+                    }
+                }
                 if (config.bias == 1 || config.bias == 3 || config.bias == 5 ||
                     config.bias == 7) {
                     code += "        indirect_texel.r -= " +
@@ -794,8 +846,17 @@ void main()
                             std::to_string(matrix * 2U + 1U) +
                             "], vec3(indirect_texel))) * exp2(float(u_indirect_matrix_scale[" +
                             std::to_string(matrix) + "])) / 256.0;\n";
+                } else if ((config.matrix >= 5 && config.matrix <= 7) ||
+                           (config.matrix >= 9 && config.matrix <= 11)) {
+                    const std::size_t matrix = (config.matrix & 3U) - 1U;
+                    const char* selected = config.matrix >= 9 ? "g" : "r";
+                    code += "        vec2 indirect_offset = (direct_coord.xy / "
+                            "(direct_coord.z == 0.0 ? 1.0 : direct_coord.z)) * "
+                            "float(indirect_texel." + std::string(selected) +
+                            ") * exp2(float(u_indirect_matrix_scale[" +
+                            std::to_string(matrix) + "])) / 256.0;\n";
                 } else {
-                    code += "        vec2 indirect_offset = vec2(indirect_texel) / 256.0;\n";
+                    code += "        vec2 indirect_offset = vec2(0.0);\n";
                 }
                 code += "        vec2 base_coord = direct_coord.xy / "
                         "(direct_coord.z == 0.0 ? 1.0 : direct_coord.z);\n";
@@ -809,11 +870,21 @@ void main()
                 code += "        indirect_previous = indirect_offset;\n";
                 code += "        vec3 tev_coord = vec3(base_coord + indirect_offset, 1.0);\n";
                 coord = "tev_coord";
+                if (config.unmodified_lod) {
+                    texel = "sample_texmap_lod(" +
+                            std::to_string(stage.texmap) + ", " + coord +
+                            ", direct_coord)";
+                    raw_texel = "sample_texmap_raw_lod(" +
+                                std::to_string(stage.texmap) + ", " + coord +
+                                ", direct_coord)";
+                }
             }
-            texel = "sample_texmap(" + std::to_string(stage.texmap) + ", " +
-                    coord + ")";
-            raw_texel = "sample_texmap_raw(" +
-                        std::to_string(stage.texmap) + ", " + coord + ")";
+            if (texel.empty()) {
+                texel = "sample_texmap(" + std::to_string(stage.texmap) + ", " +
+                        coord + ")";
+                raw_texel = "sample_texmap_raw(" +
+                            std::to_string(stage.texmap) + ", " + coord + ")";
+            }
             break;
         }
         case TexelSource::White:
@@ -825,9 +896,15 @@ void main()
             break;
         }
         const int channel = raster_channel(stage.color_channel);
-        const std::string raster =
-            channel < 0 ? "ivec4(0)"
-                        : "raster" + std::to_string(channel);
+        std::string raster;
+        if (stage.color_channel == 7) { /* GX_ALPHA_BUMP */
+            raster = "ivec4(alpha_bump)";
+        } else if (stage.color_channel == 8) { /* GX_ALPHA_BUMPN */
+            raster = "ivec4(alpha_bump | (alpha_bump >> 5))";
+        } else {
+            raster = channel < 0 ? "ivec4(0)"
+                                 : "raster" + std::to_string(channel);
+        }
         code += "        ivec4 tex_raw = " + raw_texel + ";\n";
         code += "        ivec4 tex = (" + texel + ")." +
                 kSwapSwizzles[swap_table(stage.texture_swap)] + ";\n";

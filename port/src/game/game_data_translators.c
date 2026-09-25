@@ -1571,6 +1571,62 @@ static s16* stage_s16_list(MeleeHostHsdReader* reader, mh_u32 at, s32 count)
     return list;
 }
 
+/* A pointed-to s16 table has no count field of its own.  Archive extents end
+ * at the next relocation/public boundary, which is the exact table length. */
+static s16* stage_s16_array(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    const mh_u32 bytes = melee_host_hsd_reader_extent(reader, at);
+
+    if (bytes == 0 || bytes % sizeof(mh_u16) != 0 || bytes / 2 > INT32_MAX) {
+        melee_host_hsd_reader_fail(reader,
+                                   "a stage s16 table has an invalid extent");
+        return NULL;
+    }
+    return stage_s16_list(reader, at, (s32) (bytes / 2));
+}
+
+/* Mute City's yakumono parameters point at the same 0x14-byte descriptor and
+ * 0x3C-byte scalar records used by the fighter dynamics translator below. */
+static DynamicsDesc* stage_dynamics_desc(MeleeHostHsdReader* reader,
+                                         mh_u32 at)
+{
+    enum { STAGE_DYNAMICS_RECORD_SIZE = 0x3C, STAGE_DYNAMICS_MAX = 0x1000 };
+    DynamicsDesc* const desc = melee_host_hsd_reader_allocate(
+        reader, sizeof(*desc), alignof(DynamicsDesc));
+    const mh_u32 count = melee_host_hsd_reader_u32(reader, at + 0x4);
+    bool present;
+    const mh_u32 target = target_of(reader, at, &present);
+
+    if (desc == NULL) {
+        return NULL;
+    }
+    if (count > STAGE_DYNAMICS_MAX || (count != 0 && !present)) {
+        melee_host_hsd_reader_fail(reader,
+                                   "stage dynamics have an invalid record list");
+        return NULL;
+    }
+    desc->data = NULL;
+    if (count != 0) {
+        const mh_u32 bytes = count * STAGE_DYNAMICS_RECORD_SIZE;
+        if (melee_host_hsd_reader_extent(reader, target) < bytes) {
+            melee_host_hsd_reader_fail(
+                reader, "stage dynamics records exceed their archive block");
+            return NULL;
+        }
+        desc->data = melee_host_hsd_reader_allocate(
+            reader, bytes, alignof(mh_u32));
+        if (desc->data == NULL) {
+            return NULL;
+        }
+        copy_words(reader, target, desc->data, 0, bytes);
+    }
+    desc->count = count;
+    desc->pos.x = melee_host_hsd_reader_f32(reader, at + 0x8);
+    desc->pos.y = melee_host_hsd_reader_f32(reader, at + 0xC);
+    desc->pos.z = melee_host_hsd_reader_f32(reader, at + 0x10);
+    return melee_host_hsd_reader_failed(reader) ? NULL : desc;
+}
+
 static void stage_model(MeleeHostHsdReader* reader, mh_u32 at,
                         struct UnkStageDat_x8_t* model)
 {

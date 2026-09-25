@@ -259,25 +259,9 @@ void melee_host_game_unlock_all(void)
  * and losing the process to it.
  *
  * The list is measured, not asserted: rerun port/tools/sweep_stages.py after
- * changing stage data and update it from what that reports.  Measured on
- * 21 September 2026, 15 of the 30 squares. */
-static const mh_u8 melee_host_playable_stkinds[] = {
-    7,  /* Corneria */
-    9,  /* Onett */
-    12, /* Jungle Japes */
-    14, /* Hyrule Temple */
-    15, /* Brinstar Depths */
-    17, /* Green Greens */
-    18, /* Fourside */
-    19, /* Mushroom Kingdom */
-    23, /* Poke Floats */
-    27, /* Flat Zone */
-    28, /* Dream Land N64 */
-    29, /* Yoshi's Island N64 */
-    30, /* Kongo Jungle N64 */
-    31, /* Battlefield */
-    32, /* Final Destination */
-};
+ * changing stage data, update port/data/stage_status.json from the results,
+ * then run port/tools/gen_stage_status.py. */
+#include "playable_stages.c.inc"
 
 bool melee_host_stage_is_playable(int stkind)
 {

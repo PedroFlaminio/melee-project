@@ -407,7 +407,15 @@ endif()
 add_executable(melee-pc src/main.cpp)
 if(WIN32)
     target_sources(melee-pc PRIVATE src/windows_asset_setup.cpp)
-    target_link_libraries(melee-pc PRIVATE Comctl32 Comdlg32 Shell32)
+    target_link_libraries(melee-pc PRIVATE Bcrypt Comctl32 Comdlg32 Shell32)
+    add_custom_command(TARGET melee-pc POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:melee-pc>/tools"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/tools/melee_extract.py"
+                "$<TARGET_FILE_DIR:melee-pc>/tools/melee_extract.py"
+        COMMENT "Bundling the first-run asset extractor"
+    )
 endif()
 target_link_libraries(melee-pc PRIVATE melee_game_core)
 target_include_directories(melee-pc PRIVATE
@@ -540,6 +548,17 @@ if(MELEE_HOST_BUILD_TESTS)
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_yakumono_layout.py
                     --check
+        )
+        add_test(
+            NAME melee-host-stage-status-generated
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_stage_status.py
+                    --check
+        )
+        add_test(
+            NAME melee-host-stage-sweep-tool
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_sweep_stages.py
         )
     endif()
     # Local game assets are intentionally untracked.  When available, retain

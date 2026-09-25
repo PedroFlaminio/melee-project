@@ -415,13 +415,55 @@ TEST_CASE("indirect texture offsets match the refraction matrix arithmetic")
     indirect.tev_stages[0].format = GX_ITF_5;
     indirect.tev_stages[0].bias = GX_ITB_NONE;
     indirect.tev_stages[0].matrix = GX_ITM_OFF;
-    const auto unscaled = melee::gx::indirect_texture_offset(
+    const auto disabled = melee::gx::indirect_texture_offset(
         indirect, 0, { 248, 120, 0, 0 });
-    REQUIRE(close(unscaled[0], 31.0F / 256.0F));
-    REQUIRE(close(unscaled[1], 15.0F / 256.0F));
     const std::array<float, 2> no_offset{};
+    REQUIRE(disabled == no_offset);
+
+    indirect.tev_stages[0].matrix = GX_ITM_S0;
+    indirect.matrices[0].scale_exp = 1;
+    const auto s_matrix = melee::gx::indirect_texture_offset(
+        indirect, 0, { 248, 120, 0, 0 }, { 0.5F, 0.25F });
+    REQUIRE(close(s_matrix[0], 31.0F / 256.0F));
+    REQUIRE(close(s_matrix[1], 31.0F / 512.0F));
+    indirect.tev_stages[0].matrix = GX_ITM_T0;
+    const auto t_matrix = melee::gx::indirect_texture_offset(
+        indirect, 0, { 248, 120, 0, 0 }, { 0.5F, 0.25F });
+    REQUIRE(close(t_matrix[0], 15.0F / 256.0F));
+    REQUIRE(close(t_matrix[1], 15.0F / 512.0F));
     REQUIRE(melee::gx::indirect_texture_offset(indirect, 1, { 1, 2, 3, 4 })
             == no_offset);
+}
+
+TEST_CASE("indirect shaders honor alpha bump, S/T matrices and original LOD")
+{
+    MeleeHostGxTevState tev = program(1);
+    tev.texcoord_gen_count = 2;
+    tev.stages[0].texcoord = GX_TEXCOORD1;
+    tev.stages[0].texmap = GX_TEXMAP1;
+    tev.stages[0].color_channel = GX_ALPHA_BUMPN;
+
+    MeleeHostGxIndirectState indirect{};
+    indirect.stage_count = 1;
+    indirect.stages[0].texcoord = GX_TEXCOORD0;
+    indirect.stages[0].texmap = GX_TEXMAP0;
+    indirect.tev_stages[0].indirect = true;
+    indirect.tev_stages[0].ind_stage = GX_INDTEXSTAGE0;
+    indirect.tev_stages[0].format = GX_ITF_5;
+    indirect.tev_stages[0].matrix = GX_ITM_S0;
+    indirect.tev_stages[0].unmodified_lod = true;
+    indirect.tev_stages[0].alpha_select = GX_ITBA_T;
+
+    const std::string source =
+        melee::gx::tev_fragment_shader_source(tev, indirect);
+    REQUIRE(source.find("float(indirect_texel.r)") != std::string::npos);
+    REQUIRE(source.find("alpha_bump = (indirect_texel.g & 31) << 3") !=
+            std::string::npos);
+    REQUIRE(source.find("alpha_bump | (alpha_bump >> 5)") !=
+            std::string::npos);
+    REQUIRE(source.find("sample_texmap_lod(1, tev_coord, direct_coord)") !=
+            std::string::npos);
+    REQUIRE(source.find("textureGrad") != std::string::npos);
 }
 
 /* The GL conformance run only compiles the programs a capture happened to
@@ -459,12 +501,13 @@ TEST_CASE("every generated shader emits balanced GLSL delimiters")
     REQUIRE(balanced(melee::gx::tev_fragment_shader_source(tev)));
 
     /* Every indirect knob that steers a distinct emission branch: the matrix
-     * id picks matrix arithmetic or the raw offset, the format sets the texel
+     * id picks regular, S/T or disabled arithmetic, the format sets the texel
      * shift, the bias picks which channels are centred, and the wrap ids
      * select pass-through, a period or a forced zero. */
     for (const mh_u32 matrix :
          { (mh_u32) GX_ITM_OFF, (mh_u32) GX_ITM_0, (mh_u32) GX_ITM_1,
-           (mh_u32) GX_ITM_2 }) {
+           (mh_u32) GX_ITM_2, (mh_u32) GX_ITM_S0,
+           (mh_u32) GX_ITM_T0 }) {
         for (const mh_u32 format :
              { (mh_u32) GX_ITF_8, (mh_u32) GX_ITF_5, (mh_u32) GX_ITF_4,
                (mh_u32) GX_ITF_3 }) {

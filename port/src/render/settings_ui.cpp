@@ -2,6 +2,8 @@
 
 #include <imgui.h>
 
+#include <iterator>
+
 #include <backends/imgui_impl_opengl3.h>
 #include <backends/imgui_impl_sdl3.h>
 
@@ -178,12 +180,14 @@ namespace melee::render {
                     "60 FPS",  "120 FPS", "144 FPS",
                     "165 FPS", "240 FPS"
                 };
-                for (int i = 0; i < 5; ++i) {
+                static_assert(std::size(rates) == std::size(rate_items));
+                for (std::size_t i = 0; i < std::size(rates); ++i) {
                     if (rates[i] == settings->rate) {
-                        rate_idx = i;
+                        rate_idx = static_cast<int>(i);
                     }
                 }
-                if (ImGui::Combo("Presentation Rate", &rate_idx, rate_items, 6)) {
+                if (ImGui::Combo("Presentation Rate", &rate_idx, rate_items,
+                                 static_cast<int>(std::size(rate_items)))) {
                     settings->rate = rates[rate_idx];
                     changed = true;
                 }

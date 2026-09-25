@@ -1,18 +1,25 @@
 #include "windows_asset_setup.hpp"
+#include "assets/virtual_disc.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <bcrypt.h>
 #include <commctrl.h>
 #include <commdlg.h>
 #include <shellapi.h>
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <fstream>
+#include <iomanip>
+#include <iterator>
 #include <optional>
+#include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace melee::windows {
@@ -22,6 +29,8 @@ constexpr int extract_button_id = 1001;
 constexpr int explorer_button_id = 1002;
 constexpr int close_button_id = 1003;
 constexpr UINT_PTR progress_timer_id = 1004;
+constexpr char supported_dol_sha1[] =
+    "08e0bf20134dfcb260699671004527b2d6bb1a45";
 
 struct AssetSetupWindow {
     std::filesystem::path root;
@@ -67,6 +76,98 @@ std::optional<std::filesystem::path> find_executable(const wchar_t* name)
         return std::nullopt;
     }
     return std::filesystem::path(path.data());
+}
+
+struct PythonCommand {
+    std::filesystem::path executable;
+    bool launcher = false;
+};
+
+std::optional<PythonCommand> find_python()
+{
+    for (const wchar_t* name : { L"python.exe", L"python3.exe", L"py.exe" }) {
+        if (const auto executable = find_executable(name)) {
+            return PythonCommand{ *executable, std::wstring_view(name) == L"py.exe" };
+        }
+    }
+    return std::nullopt;
+}
+
+bool manifest_has_string(const std::string& manifest, const char* key,
+                         const char* value)
+{
+    const std::string name = std::string("\"") + key + "\"";
+    std::size_t at = manifest.find(name);
+    if (at == std::string::npos) {
+        return false;
+    }
+    at = manifest.find(':', at + name.size());
+    if (at == std::string::npos) {
+        return false;
+    }
+    at = manifest.find_first_not_of(" \t\r\n", at + 1);
+    return at != std::string::npos &&
+           manifest.compare(at, std::strlen(value) + 2,
+                            std::string("\"") + value + "\"") == 0;
+}
+
+std::optional<std::string> file_sha1(const std::filesystem::path& path)
+{
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD object_size = 0;
+    DWORD digest_size = 0;
+    DWORD received = 0;
+    std::vector<UCHAR> object;
+    std::vector<UCHAR> digest;
+    std::array<char, 64 * 1024> buffer{};
+    std::ifstream input(path, std::ios::binary);
+    if (!input || BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA1_ALGORITHM,
+                                               nullptr, 0) < 0) {
+        return std::nullopt;
+    }
+    const auto close_algorithm = [&] { BCryptCloseAlgorithmProvider(algorithm, 0); };
+    if (BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+                          reinterpret_cast<PUCHAR>(&object_size),
+                          sizeof(object_size), &received, 0) < 0 ||
+        BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+                          reinterpret_cast<PUCHAR>(&digest_size),
+                          sizeof(digest_size), &received, 0) < 0) {
+        close_algorithm();
+        return std::nullopt;
+    }
+    object.resize(object_size);
+    digest.resize(digest_size);
+    if (BCryptCreateHash(algorithm, &hash, object.data(), object_size, nullptr,
+                         0, 0) < 0) {
+        close_algorithm();
+        return std::nullopt;
+    }
+    while (input) {
+        input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const auto bytes = input.gcount();
+        if (bytes > 0 &&
+            BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer.data()),
+                           static_cast<ULONG>(bytes), 0) < 0) {
+            BCryptDestroyHash(hash);
+            close_algorithm();
+            return std::nullopt;
+        }
+    }
+    const bool read_ok = input.eof();
+    const bool hash_ok =
+        read_ok && BCryptFinishHash(hash, digest.data(), digest_size, 0) >= 0;
+    BCryptDestroyHash(hash);
+    close_algorithm();
+    if (!hash_ok) {
+        return std::nullopt;
+    }
+    std::ostringstream result;
+    result << std::hex << std::setfill('0');
+    for (const UCHAR byte : digest) {
+        result << std::setw(2) << static_cast<unsigned>(byte);
+    }
+    return result.str();
 }
 
 void set_default_font(HWND control)
@@ -140,7 +241,7 @@ void start_extraction(HWND window, AssetSetupWindow& setup)
         return;
     }
 
-    const auto python = find_executable(L"python.exe");
+    const auto python = find_python();
     if (!python.has_value()) {
         MessageBoxW(window, L"Python could not be found. Install Python 3 and try again.",
                     L"Python not found", MB_OK | MB_ICONERROR);
@@ -186,7 +287,8 @@ void start_extraction(HWND window, AssetSetupWindow& setup)
         return;
     }
 
-    std::wstring command = quoted(*python) + L" " + quoted(extractor) +
+    std::wstring command = quoted(python->executable) +
+                           (python->launcher ? L" -3 " : L" ") + quoted(extractor) +
                            L" extract " +
                            quoted(std::filesystem::path(image.data())) + L" " +
                            quoted(destination) + L" --progress-file " +
@@ -205,7 +307,7 @@ void start_extraction(HWND window, AssetSetupWindow& setup)
     startup.hStdError = log;
     PROCESS_INFORMATION process{};
     const BOOL started = CreateProcessW(
-        python->c_str(), command_buffer.data(), nullptr, nullptr, TRUE,
+        python->executable.c_str(), command_buffer.data(), nullptr, nullptr, TRUE,
         CREATE_NO_WINDOW, nullptr, setup.root.c_str(), &startup, &process);
     const DWORD start_error = started ? ERROR_SUCCESS : GetLastError();
     CloseHandle(input);
@@ -300,9 +402,33 @@ std::filesystem::path find_project_root()
 bool has_local_assets(const std::filesystem::path& project_root)
 {
     const auto assets = project_root / "assets-local";
-    return std::filesystem::is_regular_file(assets / "sys" / "main.dol") &&
-           std::filesystem::is_regular_file(assets / "manifest.json") &&
-           std::filesystem::is_regular_file(assets / "dvd-index.bin");
+    const auto dol = assets / "sys" / "main.dol";
+    const auto manifest_path = assets / "manifest.json";
+    if (!std::filesystem::is_regular_file(dol) ||
+        !std::filesystem::is_regular_file(manifest_path) ||
+        !std::filesystem::is_regular_file(assets / "dvd-index.bin")) {
+        return false;
+    }
+    std::ifstream input(manifest_path, std::ios::binary);
+    const std::string manifest{ std::istreambuf_iterator<char>(input), {} };
+    if (manifest.empty() || manifest.find("\"schema_version\": 1") ==
+                                std::string::npos ||
+        manifest.find("\"supported\": true") == std::string::npos ||
+        !manifest_has_string(manifest, "game_id", "GALE01") ||
+        !manifest_has_string(manifest, "dol_sha1", supported_dol_sha1) ||
+        !manifest_has_string(manifest, "dvd_index", "dvd-index.bin")) {
+        return false;
+    }
+    try {
+        const melee::assets::VirtualDisc disc(assets);
+        if (disc.entry_count() == 0) {
+            return false;
+        }
+    } catch (const melee::assets::VirtualDiscError&) {
+        return false;
+    }
+    const auto digest = file_sha1(dol);
+    return digest.has_value() && *digest == supported_dol_sha1;
 }
 
 bool show_missing_assets_window(const std::filesystem::path& project_root)
