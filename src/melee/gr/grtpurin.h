@@ -28,7 +28,7 @@
 /* 2234CC */ bool grTPurin_802234CC(Ground_GObj*);
 /* 2234D4 */ void grTPurin_802234D4(Ground_GObj*);
 /* 2234F4 */ void grTPurin_802234F4(Ground_GObj*);
-/* 2234F8 */ DynamicsDesc* grTPurin_802234F8(enum_t);
+/* 2234F8 */ struct lbColl_80008D30_arg1* grTPurin_802234F8(enum_t);
 /* 223578 */ bool grTPurin_80223578(Vec3*, int, HSD_JObj*);
 /* 3E9394 */ extern StageData grTPr_StageData;
 

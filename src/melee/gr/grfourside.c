@@ -792,7 +792,7 @@ void fn_801F3F74(HSD_GObj* gobj, int renderpass)
     grDisplay_801C5DB0(gobj, renderpass);
 }
 
-DynamicsDesc* grFourside_801F41E0(enum_t arg)
+struct lbColl_80008D30_arg1* grFourside_801F41E0(enum_t arg)
 {
     return NULL;
 }

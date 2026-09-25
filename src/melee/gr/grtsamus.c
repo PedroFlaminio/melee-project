@@ -30,7 +30,7 @@
 /* 223828 */ static bool grTSamus_80223828(Ground_GObj*);
 /* 223830 */ static void grTSamus_80223830(Ground_GObj*);
 /* 223850 */ static void grTSamus_80223850(Ground_GObj*);
-/* 223854 */ static DynamicsDesc* grTSamus_OnTouchLine(enum_t);
+/* 223854 */ static struct lbColl_80008D30_arg1* grTSamus_OnTouchLine(enum_t);
 /* 22385C */ static bool grTSamus_OnCheckShadowRender(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grTSs_StageCallbacks[] = {
@@ -157,7 +157,7 @@ void grTSamus_80223830(Ground_GObj* gobj)
 
 void grTSamus_80223850(Ground_GObj* gobj) {}
 
-DynamicsDesc* grTSamus_OnTouchLine(enum_t arg0)
+struct lbColl_80008D30_arg1* grTSamus_OnTouchLine(enum_t arg0)
 {
     return NULL;
 }

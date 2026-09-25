@@ -32,7 +32,7 @@ static void grTRoy_8022464C(Ground_GObj* gobj);
 static bool grTRoy_8022469C(Ground_GObj*);
 static void grTRoy_802246A4(Ground_GObj*);
 static void grTRoy_802246C4(Ground_GObj*);
-static DynamicsDesc* grTRoy_802246C8(enum_t);
+static struct lbColl_80008D30_arg1* grTRoy_802246C8(enum_t);
 static bool grTRoy_802246D0(Vec3*, int, HSD_JObj*);
 
 StageCallbacks grTFe_StageCallbacks[4] = {
@@ -158,7 +158,7 @@ static void grTRoy_802246A4(Ground_GObj* gobj)
 
 static void grTRoy_802246C4(Ground_GObj* gobj) {}
 
-static DynamicsDesc* grTRoy_802246C8(enum_t arg0)
+static struct lbColl_80008D30_arg1* grTRoy_802246C8(enum_t arg0)
 {
     return NULL;
 }

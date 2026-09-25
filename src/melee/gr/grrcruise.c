@@ -145,7 +145,10 @@ void grRCruise_801FF168(void)
     HSD_JObjSetFlagsAll(jobj, JOBJ_HIDDEN);
     grgobj = grRCruise_801FF2C8(3);
     gp2 = GET_GROUND(grgobj);
-    gp2->u.rcruise2.xEC = jgobj;
+    /* grRCruise_801FFADC reads this back as u.scroll.anim_gobj; the two
+     * views share gp+0xEC only while a DynamicsDesc holds a four-byte
+     * pointer. */
+    gp2->u.scroll.anim_gobj = jgobj;
     grRCruise_801FF2C8(0);
     grRCruise_801FF2C8(2);
     grRCruise_801FF2C8(5);
@@ -247,6 +250,8 @@ void grRCruise_801FF444(Ground_GObj* gobj)
     gp->u.rcruise.x10 = 0;
 }
 
+extern s16 grRc_803E4FF0[17];
+
 void grRCruise_801FF5B4(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
@@ -255,8 +260,19 @@ void grRCruise_801FF5B4(Ground_GObj* gobj)
     Ground_801C2ED0(jobj, gp->map_id);
     grAnime_801C8138(gobj, gp->map_id, 0);
     gp->u.rcruise.x10 = 1;
+#ifdef MELEE_HOST
+    /* On the console this block is the Map_Chikuwa of u.map and the entries
+     * of u.rcruise at once, both at gp+0x130; nothing reads it through the
+     * first.  On the host the two views put that field at different offsets
+     * and an entry is wider than 0x198 / 17 bytes, so the entries are
+     * allocated for what grRCruise_80200B48 writes into them. */
+    gp->u.rcruise.entries =
+        HSD_MemAlloc(ARRAY_SIZE(grRc_803E4FF0) * sizeof(*gp->u.rcruise.entries));
+    HSD_ASSERT(410, gp->u.rcruise.entries);
+#else
     gp->u.map.chikuwa = HSD_MemAlloc(sizeof(*gp->u.map.chikuwa));
     HSD_ASSERT(410, gp->u.map.chikuwa);
+#endif
     grRCruise_80201410(gobj);
     Ground_801C10B8(gobj, grRCruise_801FF444);
     grRCruise_80200540(gobj);
@@ -1191,7 +1207,7 @@ void fn_80201BE0(HSD_GObj* gobj, int pass)
     grDisplay_801C5DB0(gobj, pass);
 }
 
-DynamicsDesc* grRCruise_80201C50(enum_t arg)
+struct lbColl_80008D30_arg1* grRCruise_80201C50(enum_t arg)
 {
     return NULL;
 }

@@ -67,11 +67,6 @@ typedef struct IzumiReflection {
     HSD_ImageDesc* image;
 } IzumiReflection;
 
-typedef struct IzumiUnkCC {
-    u8 pad[0x18];
-    HSD_GObj* x18;
-} IzumiUnkCC;
-
 #define GET_REFLECTION(gobj) ((IzumiReflection*) HSD_GObjGetUserData(gobj))
 
 static struct grIzumi_YakumonoParam* yakumono_param;
@@ -335,8 +330,9 @@ void grIzumi_801CBE64(Ground_GObj* gobj)
         grLib_801C96F8(0x7536, 0x1E, &y);
     }
     gp->u.izumi.xCC = grIzumi_801CBCE8(2);
-    ((IzumiUnkCC*) HSD_GObjGetUserData(gp->u.izumi.xCC))->x18 =
-        gp->u.izumi.xC8;
+    /* Through Ground's own x18.  A struct of 0x18 pad bytes put it there
+     * only while the header's pointers were four bytes. */
+    GET_GROUND(gp->u.izumi.xCC)->x18 = gp->u.izumi.xC8;
     jobj = Ground_801C3FA4(gobj, 4);
     { // this looks like inlines, but there's a lot of small differences
         u8 _[4];
@@ -858,7 +854,7 @@ void grIzumi_801CD220(HSD_GObj* gobj, int renderpass)
     grDisplay_801C5DB0(gobj, renderpass);
 }
 
-DynamicsDesc* grIzumi_801CD278(enum_t x)
+struct lbColl_80008D30_arg1* grIzumi_801CD278(enum_t x)
 {
     return NULL;
 }

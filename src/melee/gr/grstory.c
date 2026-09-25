@@ -22,7 +22,7 @@ struct grStory_YakumonoParam {
 };
 
 /* 1E302C */ static void grStory_801E302C(GrDemoInitArg);
-/* 1E36D0 */ static DynamicsDesc* grStory_801E36D0(enum_t);
+/* 1E36D0 */ static struct lbColl_80008D30_arg1* grStory_801E36D0(enum_t);
 
 static StageCallbacks grSt_StageCallbacks[] = {
     { 0 },
@@ -305,7 +305,7 @@ void grStory_801E366C(Ground_GObj* gobj)
     }
 }
 
-static DynamicsDesc* grStory_801E36D0(enum_t arg0)
+static struct lbColl_80008D30_arg1* grStory_801E36D0(enum_t arg0)
 {
     return NULL;
 }

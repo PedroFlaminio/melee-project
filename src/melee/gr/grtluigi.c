@@ -131,7 +131,7 @@ void grTLuigi_80221EC0(Ground_GObj* gobj)
 
 void grTLuigi_80221EE0(Ground_GObj* arg0) {}
 
-DynamicsDesc* grTLuigi_80221EE4(enum_t arg0)
+struct lbColl_80008D30_arg1* grTLuigi_80221EE4(enum_t arg0)
 {
     return NULL;
 }

@@ -116,14 +116,14 @@ POINTER_RE = re.compile(r"\*\s*$")
 
 # Pointer fields are not interchangeable.  `void*` fields in these structs
 # are the stage colour-animation command streams, but Icicle also stores s16
-# tables and Mute City stores DynamicsDesc records.  Guessing from the pointer
+# tables and Mute City stores the hits its track deals (lbColl_80008D30_arg1).  Guessing from the pointer
 # width corrupts those objects on little-endian hosts, so every supported
 # pointee type has an explicit translator.
 POINTER_TYPES = {
     "void": ("command_stream", "void*"),
     "s16": ("s16_array", "mh_s16*"),
     "short": ("s16_array", "mh_s16*"),
-    "DynamicsDesc": ("dynamics_desc", "struct DynamicsDesc*"),
+    "lbColl_80008D30_arg1": ("hit_desc", "struct lbColl_80008D30_arg1*"),
 }
 
 
@@ -471,7 +471,7 @@ def emit_translator(stage) -> str:
                     "command_stream":
                         "melee_host_hsd_reader_command_stream(reader, target)",
                     "s16_array": "stage_s16_array(reader, target)",
-                    "dynamics_desc": "stage_dynamics_desc(reader, target)",
+                    "hit_desc": "stage_hit_desc(reader, target)",
                 }
                 build = builders[f["pointer_kind"]]
                 out += [
@@ -506,7 +506,7 @@ def emit(done) -> tuple[str, str]:
     head = [banner, "#ifndef MELEE_HOST_YAKUMONO_PARAM_H",
             "#define MELEE_HOST_YAKUMONO_PARAM_H", "",
             "#include <melee_host/types.h>", "",
-            "struct DynamicsDesc;", ""]
+            "struct lbColl_80008D30_arg1;", ""]
     for s in structs:
         head += [emit_struct(s), ""]
     head += ["#endif", ""]

@@ -1558,7 +1558,7 @@ void fn_80216DE4(void* user_data, int joint_id, CollData* coll, int coll_x50,
     }
 }
 
-DynamicsDesc* grGreens_80216E64(enum_t arg)
+struct lbColl_80008D30_arg1* grGreens_80216E64(enum_t arg)
 {
     return NULL;
 }

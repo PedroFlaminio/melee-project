@@ -13,7 +13,7 @@
 
 #include <melee_host/types.h>
 
-struct DynamicsDesc;
+struct lbColl_80008D30_arg1;
 
 /* grcastle.c: struct grCastle_YakumonoParam */
 struct melee_host_yakumono_castle {
@@ -524,8 +524,8 @@ struct melee_host_yakumono_pstadium {
 struct melee_host_yakumono_mutecity {
     /* 0x000 */ void* x0;
     /* 0x004 */ void* x4;
-    /* 0x008 */ struct DynamicsDesc* x8;
-    /* 0x00C */ struct DynamicsDesc* xC;
+    /* 0x008 */ struct lbColl_80008D30_arg1* x8;
+    /* 0x00C */ struct lbColl_80008D30_arg1* xC;
     /* 0x010 */ mh_u8 pad10[28];
     /* 0x02C */ mh_f32 x2C;
     /* 0x030 */ mh_f32 x30;

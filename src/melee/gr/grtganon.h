@@ -25,7 +25,7 @@
 /* 224988 */ bool grTGanon_80224988(Ground_GObj*);
 /* 224990 */ void grTGanon_80224990(Ground_GObj*);
 /* 2249B0 */ void grTGanon_802249B0(Ground_GObj*);
-/* 2249B4 */ DynamicsDesc* grTGanon_802249B4(enum_t);
+/* 2249B4 */ struct lbColl_80008D30_arg1* grTGanon_802249B4(enum_t);
 /* 224A4C */ bool grTGanon_80224A4C(Vec3*, int, HSD_JObj*);
 /* 3E98DC */ extern StageData grTGn_StageData;
 

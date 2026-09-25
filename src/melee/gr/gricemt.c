@@ -199,7 +199,7 @@ grIceMt_801FA0BC(struct grIceMt_GObj9_GObj10_UnderUpperIdPair* ids);
 #endif
 /* 1FA500 */ static int grIceMt_801FA500(HSD_GObj*, HSD_JObj*);
 /* 1FA854 */ static void grIceMt_801FA854(void);
-/* 1FA8F8 */ static DynamicsDesc* grIceMt_801FA8F8(enum_t id);
+/* 1FA8F8 */ static struct lbColl_80008D30_arg1* grIceMt_801FA8F8(enum_t id);
 /* 1FA900 */ static bool grIceMt_801FA900(Vec3* a, int id, HSD_JObj* jobj);
 
 static HSD_GObj* grIm_804D69E8;
@@ -2079,7 +2079,7 @@ void grIceMt_801FA854(void)
     return;
 }
 
-DynamicsDesc* grIceMt_801FA8F8(enum_t id)
+struct lbColl_80008D30_arg1* grIceMt_801FA8F8(enum_t id)
 {
     return 0;
 }

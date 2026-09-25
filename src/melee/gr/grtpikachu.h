@@ -27,7 +27,7 @@
 /* 223124 */ bool grTPikachu_80223124(Ground_GObj*);
 /* 22312C */ void grTPikachu_8022312C(Ground_GObj*);
 /* 22314C */ void grTPikachu_8022314C(Ground_GObj*);
-/* 223150 */ DynamicsDesc* grTPikachu_80223150(enum_t);
+/* 223150 */ struct lbColl_80008D30_arg1* grTPikachu_80223150(enum_t);
 /* 223158 */ bool grTPikachu_80223158(Vec3*, int, HSD_JObj*);
 /* 3E92CC */ extern StageData grTPk_StageData;
 

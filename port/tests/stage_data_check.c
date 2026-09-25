@@ -4,6 +4,9 @@
 
 #include <melee/gr/ground.h>
 #include <melee/gr/types.h>
+#include <melee/it/itCommonItems.h>
+#include <melee/it/types.h>
+#include <melee/lb/forward.h>
 #include <melee/mp/types.h>
 #include <melee/sc/types.h>
 #include <sysdolphin/baselib/lobj.h>
@@ -22,6 +25,11 @@ int melee_host_test_check_stage_extras(void* plit, void* quake, void* items,
 void melee_host_test_set_stage_grkind(int grkind);
 int melee_host_test_check_icemt_yakumono(void* translated, char* message,
                                          size_t size);
+int melee_host_test_grkind_mutecity(void);
+int melee_host_test_check_mutecity_yakumono(void* translated, char* message,
+                                            size_t size);
+int melee_host_test_check_stage_item_specials(void* items, char* message,
+                                              size_t size);
 
 /* ground.c declares these records locally; game_data_translators.c keeps the
  * same declarations. */
@@ -68,6 +76,58 @@ int melee_host_test_check_icemt_yakumono(void* translated, char* message,
           params->xB0[1] == 0x1234);
     CHECK(params->xB4 != NULL && params->xB4[0] == 200 &&
           params->xB4[1] == -200);
+    return 1;
+}
+
+int melee_host_test_grkind_mutecity(void)
+{
+    return Gr_Kind_MuteCity;
+}
+
+/* The track's hit: nine words, reached as the game reaches it, through the
+ * record's own type rather than DynamicsDesc, whose count only sat at +4
+ * while a pointer was four bytes. */
+int melee_host_test_check_mutecity_yakumono(void* translated, char* message,
+                                            size_t size)
+{
+    const struct melee_host_yakumono_mutecity* const params = translated;
+
+    CHECK(params != NULL);
+    CHECK(params->x8 != NULL && params->xC == NULL);
+    CHECK(params->x8->state == 1 && params->x8->damage == 8);
+    CHECK(params->x8->kb_angle == 90 && params->x8->unkC == 50);
+    CHECK(params->x8->element == 2 && params->x8->sfx_kind == 7);
+    CHECK(params->x2C == 1.5F);
+    return 1;
+}
+
+/* A Shy Guy and a Tingle.  The Shy Guy's first word is a record whose hit
+ * points itheiho.c reads, then its walking speeds; the Tingle's first word
+ * is never read, and its two trailing bytes keep their order. */
+int melee_host_test_check_stage_item_specials(void* items, char* message,
+                                              size_t size)
+{
+    struct GroundItemData** const entries = items;
+    const itHeihoAttributes* heiho;
+    const itTincleAttributes* tincle;
+
+    CHECK(entries != NULL && entries[0] != NULL && entries[1] != NULL);
+    CHECK(entries[2] == NULL);
+    CHECK(entries[0]->unk0 == It_Kind_Heiho && entries[0]->unk4 != NULL);
+    heiho = entries[0]->unk4->x4_specialAttributes;
+    CHECK(heiho != NULL);
+    CHECK(heiho->x0 != NULL && heiho->x0[0] == 15 && heiho->x0[4] == 300);
+    CHECK(heiho->walk_vel[0] == 0.3F && heiho->walk_vel[2] == 0.75F);
+    CHECK(heiho->walk_vel[3] == 1.5F);
+    CHECK(heiho->knock_vel_x == 2.0F && heiho->x18 == 30.0F);
+
+    CHECK(entries[1]->unk0 == It_Kind_Tincle && entries[1]->unk4 != NULL);
+    tincle = entries[1]->unk4->x4_specialAttributes;
+    CHECK(tincle != NULL);
+    CHECK(tincle->x0 == 0.0F);
+    CHECK(tincle->x4 == 600 && tincle->xC == -60.0F);
+    CHECK(tincle->x50 == 3.0F);
+    CHECK(tincle->x54 == 3 && tincle->x55 == 6);
     return 1;
 }
 

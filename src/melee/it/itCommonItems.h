@@ -403,6 +403,17 @@ typedef struct itHeiho_ItemVars {
     f32 x78;
 } itHeiho_ItemVars;
 
+/* GrSt.dat's block: a record whose first word is the hit points, then the
+ * walking speed of each of grstory.c's three spawn speeds.  The code used to
+ * read it both as s32** and as a flat f32 array, which only works while a
+ * pointer is four bytes wide. */
+typedef struct itHeihoAttributes {
+    /* 0x00 */ s32* x0;
+    /* 0x04 */ f32 walk_vel[4];
+    /* 0x14 */ f32 knock_vel_x;
+    /* 0x18 */ f32 x18;
+} itHeihoAttributes;
+
 /**
  * @brief Per-instance runtime state of a flipper item (overlaid on
  * @c Item::xDD4_itemVar).
@@ -564,11 +575,20 @@ typedef struct itFoods_ItemVars {
     /* +4 ip+DD8 */ u32 heal_amount;
 } itFoods_ItemVars;
 
+/* ItCo.dat's block: a count, then that many foods of 0x10 bytes each.  The
+ * code used to index it in 0x10-byte steps from offset 0, so that each food's
+ * fields sat at +4..+0x10 of an element; that only works while a pointer is
+ * four bytes wide. */
+typedef struct itFoodsDesc {
+    /* +0 */ HSD_Joint* joint;
+    /* +4 */ s32 heal_amount;
+    /* +8 */ f32 x_offset;
+    /* +C */ f32 y_offset;
+} itFoodsDesc;
+
 typedef struct itFoodsAttributes {
-    s32 x0;
-    HSD_Joint* x4;
-    s32 x8;
-    s32 xC;
+    /* +0 */ s32 count;
+    /* +4 */ itFoodsDesc foods[1];
 } itFoodsAttributes;
 
 typedef struct itWhispyApple_ItemVars {

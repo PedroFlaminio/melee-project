@@ -1062,7 +1062,7 @@ TEST_CASE("the common item data translates, leaving out per-kind layouts")
     const auto command = [](std::uint32_t opcode, std::uint32_t value) {
         return (opcode << 26U) | value;
     };
-    ArchiveBuilder builder(0x800);
+    ArchiveBuilder builder(0x900);
     builder.pointer(0x000, 0x020);
     builder.pointer(0x004, 0x180);
     builder.pointer(0x008, 0x22C);
@@ -1086,6 +1086,19 @@ TEST_CASE("the common item data translates, leaving out per-kind layouts")
     builder.f32(0x740, 3.0F);
     builder.f32(0x760, 0.8F);
     builder.f32(0x764, 0.7F);
+    // Food, kind 18: a count, then foods of a model, the damage it heals
+    // and two offsets, which the host widens around the model pointer.
+    builder.pointer(0x1C8, 0x780);
+    builder.pointer(0x784, 0x7A0);
+    builder.u32(0x7A0, 2);
+    builder.pointer(0x7A4, 0x800);
+    builder.u32(0x7A8, 5);
+    builder.f32(0x7AC, 5.0F);
+    builder.f32(0x7B0, -11.0F);
+    builder.pointer(0x7B4, 0x840);
+    builder.u32(0x7B8, 9);
+    builder.f32(0x7BC, 3.5F);
+    builder.f32(0x7C0, -8.5F);
     builder.pointer(0x22C + 117 * 4, 0x540);
     // it_804D6D40_t.
     builder.u32(0x4C0, 3);
@@ -1452,6 +1465,88 @@ TEST_CASE("Icicle's yakumono s16 tables translate as values, not commands")
                                                   sizeof(message)) == 1);
     REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
     melee_host_test_set_stage_grkind(-1);
+}
+
+extern "C" int melee_host_test_grkind_mutecity(void);
+extern "C" int melee_host_test_check_mutecity_yakumono(void* translated,
+                                                        char* message,
+                                                        std::size_t size);
+extern "C" int melee_host_test_check_stage_item_specials(void* items,
+                                                          char* message,
+                                                          std::size_t size);
+
+TEST_CASE("Mute City's track hits translate as hit records")
+{
+    // GrMc.dat's shape: x8 points at nine words of a hit, which the game
+    // hands to lbColl_80008D30.  Their first two words, 1 and 8, would be
+    // a DynamicsDesc's pointer and count, which is how the decomp typed it.
+    constexpr std::uint32_t root = 0x40;
+    ArchiveBuilder builder(root + 0x50);
+    const std::uint32_t hit[9] = { 1, 8, 90, 50, 0, 90, 2, 1, 7 };
+    for (std::uint32_t i = 0; i < 9; ++i) {
+        builder.u32(i * 4, hit[i]);
+    }
+    builder.pointer(root + 0x8, 0x00);
+    builder.f32(root + 0x2C, 1.5F);
+    builder.public_symbol(root, "yakumono_param");
+    std::vector<std::byte> bytes = builder.build();
+
+    melee_host_game_register_data_translators();
+    melee_host_test_set_stage_grkind(melee_host_test_grkind_mutecity());
+    HSD_Archive archive{};
+    REQUIRE(HSD_ArchiveParse(&archive, bytes_of(bytes), bytes.size()) == 0);
+    void* const params =
+        HSD_ArchiveGetPublicAddress(&archive, "yakumono_param");
+    REQUIRE(params != nullptr);
+    char message[256] = {};
+    REQUIRE(melee_host_test_check_mutecity_yakumono(params, message,
+                                                     sizeof(message)) == 1);
+    REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
+    melee_host_test_set_stage_grkind(-1);
+}
+
+TEST_CASE("a stage's Shy Guys and Tingle get their special attributes")
+{
+    // GrSt.dat and GrGb.dat's shapes, in one itemdata: two entries, each an
+    // item kind and an Article whose only field is its special attributes.
+    // Both blocks start with a pointer to the same five-word record.
+    ArchiveBuilder builder(0x200);
+    builder.pointer(0x000, 0x020);
+    builder.pointer(0x004, 0x030);
+    builder.u32(0x020, 210); // It_Kind_Heiho
+    builder.pointer(0x024, 0x040);
+    builder.u32(0x030, 221); // It_Kind_Tincle
+    builder.pointer(0x034, 0x060);
+    builder.pointer(0x044, 0x100);
+    builder.pointer(0x064, 0x140);
+    builder.u32(0x0E0, 15);
+    builder.f32(0x0E4, 0.5F);
+    builder.u32(0x0F0, 300);
+    builder.pointer(0x100, 0x0E0);
+    builder.f32(0x104, 0.3F);
+    builder.f32(0x108, 0.5F);
+    builder.f32(0x10C, 0.75F);
+    builder.f32(0x110, 1.5F);
+    builder.f32(0x114, 2.0F);
+    builder.f32(0x118, 30.0F);
+    builder.pointer(0x140, 0x0E0);
+    builder.u32(0x144, 600);
+    builder.f32(0x14C, -60.0F);
+    builder.f32(0x190, 3.0F);
+    builder.u8(0x194, 3);
+    builder.u8(0x195, 6);
+    builder.public_symbol(0x000, "itemdata");
+    std::vector<std::byte> bytes = builder.build();
+
+    melee_host_game_register_data_translators();
+    HSD_Archive archive{};
+    REQUIRE(HSD_ArchiveParse(&archive, bytes_of(bytes), bytes.size()) == 0);
+    void* const items = HSD_ArchiveGetPublicAddress(&archive, "itemdata");
+    REQUIRE(items != nullptr);
+    char message[256] = {};
+    REQUIRE(melee_host_test_check_stage_item_specials(items, message,
+                                                       sizeof(message)) == 1);
+    REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
 }
 
 extern "C" int melee_host_test_check_fighter_common_data(void* translated,

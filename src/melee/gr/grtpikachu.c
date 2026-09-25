@@ -136,7 +136,7 @@ void grTPikachu_8022314C(Ground_GObj* gobj)
     return;
 }
 
-DynamicsDesc* grTPikachu_80223150(enum_t unused)
+struct lbColl_80008D30_arg1* grTPikachu_80223150(enum_t unused)
 {
     return NULL;
 }

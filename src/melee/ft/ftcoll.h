@@ -28,7 +28,7 @@
 /* 0765F0 */ float ftColl_800765F0(Fighter* fp, Fighter_GObj* victim,
                                    float unk_floatvar);
 /* 076640 */ bool ftColl_80076640(Fighter*, float*);
-/* 076764 */ void ftColl_80076764(int, enum_t, Fighter_GObj*, DynamicsDesc*,
+/* 076764 */ void ftColl_80076764(int, enum_t, Fighter_GObj*, lbColl_80008D30_arg1*,
                                   Fighter* fp, FighterHurtCapsule*);
 /* 076808 */ void ftColl_80076808(Fighter* fp, HitCapsule* hit, int arg2,
                                   void* victim, bool arg4);

@@ -1189,7 +1189,7 @@ void grGreatBay_801F67A4(Vec3* vec, f32 arg8)
     }
 }
 
-DynamicsDesc* grGreatBay_801F680C(enum_t unused)
+struct lbColl_80008D30_arg1* grGreatBay_801F680C(enum_t unused)
 {
     return NULL;
 }

@@ -1341,6 +1341,178 @@ static void* bg_flash_color_anims(MeleeHostHsdReader* reader, mh_u32 root)
     return item_color_anims(reader, root);
 }
 
+/* Fails unless the `size` bytes at `at` are in one block and hold no pointer
+ * outside the words `pointers` flags, one bit a word. */
+static bool item_block_is(MeleeHostHsdReader* reader, mh_u32 at,
+                          mh_u32 size, mh_u32 pointers)
+{
+    mh_u32 word;
+
+    if (melee_host_hsd_reader_extent(reader, at) < size) {
+        melee_host_hsd_reader_fail(reader, "an item's special attributes are "
+                                           "shorter than their layout");
+        return false;
+    }
+    for (word = 0; word < size; word += 4) {
+        const bool expected = (pointers >> (word / 4)) & 1;
+        if (melee_host_hsd_reader_has_pointer(reader, at + word) != expected) {
+            melee_host_hsd_reader_fail(reader,
+                                       "an item's special attributes hold a "
+                                       "pointer where the layout has none, "
+                                       "or the reverse");
+            return false;
+        }
+    }
+    return true;
+}
+
+_Static_assert(sizeof(itTincleAttributes) == 0x58 &&
+                   offsetof(itTincleAttributes, x54) == 0x54,
+               "itTincleAttributes keeps its PowerPC layout");
+
+/* Yoshi's Story's Shy Guy.  The first word points at a five-word record of
+ * which itheiho.c reads the hit points; the rest are floats. */
+static void* heiho_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    itHeihoAttributes* attrs;
+    mh_u32 record;
+    bool present;
+    mh_u32 i;
+
+    if (!item_block_is(reader, at, 0x1C, 1U << 0)) {
+        return NULL;
+    }
+    record = target_of(reader, at + 0x0, &present);
+    if (!item_block_is(reader, record, 0x14, 0)) {
+        return NULL;
+    }
+    attrs = melee_host_hsd_reader_allocate(reader, sizeof(*attrs),
+                                           alignof(itHeihoAttributes));
+    if (attrs == NULL) {
+        return NULL;
+    }
+    attrs->x0 = melee_host_hsd_reader_allocate(reader, 0x14, alignof(s32));
+    if (attrs->x0 == NULL) {
+        return NULL;
+    }
+    copy_words(reader, record, attrs->x0, 0, 0x14);
+    for (i = 0; i < 4; i++) {
+        attrs->walk_vel[i] =
+            melee_host_hsd_reader_f32(reader, at + 0x4 + i * 4);
+    }
+    attrs->knock_vel_x = melee_host_hsd_reader_f32(reader, at + 0x14);
+    attrs->x18 = melee_host_hsd_reader_f32(reader, at + 0x18);
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
+}
+
+/* Great Bay's Tingle.  The first word points at the same five-word record
+ * the Shy Guy has, declared as a float that ittincle.c never reads, so it
+ * stays zero; the two bytes at the end keep their order. */
+static void* tincle_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    itTincleAttributes* attrs;
+
+    if (!item_block_is(reader, at, sizeof(itTincleAttributes),
+                             1U << 0))
+    {
+        return NULL;
+    }
+    attrs = melee_host_hsd_reader_allocate(reader, sizeof(*attrs),
+                                           alignof(itTincleAttributes));
+    if (attrs == NULL) {
+        return NULL;
+    }
+    memset(attrs, 0, sizeof(*attrs));
+    copy_words(reader, at, attrs, 0x4, 0x54);
+    copy_bytes(reader, at, attrs, 0x54, 0x56);
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
+}
+
+/* Food, which the Shy Guys drop and item switches spawn: a count, then as
+ * many foods of a model, the damage it heals and its offset from the spot
+ * it appears at. */
+static void* foods_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    enum { FOOD_SIZE = 0x10, FOODS_MAX = 0x100 };
+    itFoodsAttributes* attrs;
+    s32 count;
+    s32 i;
+
+    count = (s32) melee_host_hsd_reader_u32(reader, at + 0x0);
+    if (count <= 0 || count > FOODS_MAX) {
+        melee_host_hsd_reader_fail(reader, "the food list has a bad count");
+        return NULL;
+    }
+    for (i = 0; i < count; i++) {
+        /* Only the model is a pointer. */
+        if (!item_block_is(reader, at + 0x4 + (mh_u32) i * FOOD_SIZE,
+                           FOOD_SIZE, 1U << 0))
+        {
+            return NULL;
+        }
+    }
+    attrs = melee_host_hsd_reader_allocate(
+        reader,
+        offsetof(itFoodsAttributes, foods) + sizeof(itFoodsDesc) * (size_t) count,
+        alignof(itFoodsAttributes));
+    if (attrs == NULL) {
+        return NULL;
+    }
+    attrs->count = count;
+    for (i = 0; i < count; i++) {
+        const mh_u32 food = at + 0x4 + (mh_u32) i * FOOD_SIZE;
+        bool present;
+        const mh_u32 joint = target_of(reader, food + 0x0, &present);
+
+        attrs->foods[i].joint =
+            present ? melee_host_hsd_reader_joint(reader, joint) : NULL;
+        attrs->foods[i].heal_amount =
+            (s32) melee_host_hsd_reader_u32(reader, food + 0x4);
+        attrs->foods[i].x_offset = melee_host_hsd_reader_f32(reader, food + 0x8);
+        attrs->foods[i].y_offset = melee_host_hsd_reader_f32(reader, food + 0xC);
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
+}
+
+/* Items whose special attributes hold pointers, or whose code reads them in a
+ * layout that only fits four-byte pointers, translated field by field.  Kinds
+ * from itPublicData and from a stage's itemdata share the table: item_article
+ * leaves every item's special attributes out, and any kind not here (or in
+ * item_scalar_attributes) keeps the stop by name in Item_80267978. */
+static const struct {
+    mh_u32 kind;
+    void* (*translate)(MeleeHostHsdReader* reader, mh_u32 at);
+} item_kind_specials[] = {
+    { It_Kind_Foods, foods_attrs },
+    { It_Kind_Heiho, heiho_attrs },
+    { It_Kind_Tincle, tincle_attrs },
+};
+
+/* Gives `article`, of `kind` and read from `at`, its special attributes when
+ * item_kind_specials knows the kind. */
+static void item_kind_special(MeleeHostHsdReader* reader, mh_u32 kind,
+                              mh_u32 at, Article* article)
+{
+    mh_u32 i;
+
+    for (i = 0; i < sizeof(item_kind_specials) / sizeof(item_kind_specials[0]);
+         i++)
+    {
+        bool present;
+        mh_u32 special;
+
+        if (kind != item_kind_specials[i].kind) {
+            continue;
+        }
+        special = target_of(reader, at + 0x04, &present);
+        if (present) {
+            article->x4_specialAttributes =
+                item_kind_specials[i].translate(reader, special);
+        }
+        return;
+    }
+}
+
 static void* item_public_data(MeleeHostHsdReader* reader, mh_u32 root)
 {
     mh_u32 tables[6];
@@ -1368,7 +1540,15 @@ static void* item_public_data(MeleeHostHsdReader* reader, mh_u32 root)
     data->x0 = item_common_data(reader, tables[0]);
     data->x4 = item_article_table(reader, tables[1], It_Kind_Kuriboh);
     if (data->x4 != NULL) {
+        bool present;
+        const mh_u32 foods =
+            target_of(reader, tables[1] + It_Kind_Foods * 4, &present);
+
         item_common_scalar_attributes(reader, tables[1], data->x4);
+        if (present && data->x4[It_Kind_Foods] != NULL) {
+            item_kind_special(reader, It_Kind_Foods, foods,
+                              data->x4[It_Kind_Foods]);
+        }
     }
     data->x8 = item_article_table(reader, tables[2],
                                   It_PKind_Start - It_Kind_Kuriboh);
@@ -1585,46 +1765,35 @@ static s16* stage_s16_array(MeleeHostHsdReader* reader, mh_u32 at)
     return stage_s16_list(reader, at, (s32) (bytes / 2));
 }
 
-/* Mute City's yakumono parameters point at the same 0x14-byte descriptor and
- * 0x3C-byte scalar records used by the fighter dynamics translator below. */
-static DynamicsDesc* stage_dynamics_desc(MeleeHostHsdReader* reader,
-                                         mh_u32 at)
-{
-    enum { STAGE_DYNAMICS_RECORD_SIZE = 0x3C, STAGE_DYNAMICS_MAX = 0x1000 };
-    DynamicsDesc* const desc = melee_host_hsd_reader_allocate(
-        reader, sizeof(*desc), alignof(DynamicsDesc));
-    const mh_u32 count = melee_host_hsd_reader_u32(reader, at + 0x4);
-    bool present;
-    const mh_u32 target = target_of(reader, at, &present);
+/* Mute City's yakumono parameters point at the hit the track deals a fighter
+ * touching it, through the stage's on_touch_line: nine words, all scalars. */
+_Static_assert(sizeof(lbColl_80008D30_arg1) == 0x24,
+               "lbColl_80008D30_arg1 keeps its PowerPC layout");
 
+static lbColl_80008D30_arg1* stage_hit_desc(MeleeHostHsdReader* reader,
+                                            mh_u32 at)
+{
+    lbColl_80008D30_arg1* desc;
+    mh_u32 word;
+
+    if (melee_host_hsd_reader_extent(reader, at) < sizeof(*desc)) {
+        melee_host_hsd_reader_fail(reader,
+                                   "a stage hit is shorter than its layout");
+        return NULL;
+    }
+    for (word = 0; word < sizeof(*desc); word += 4) {
+        if (melee_host_hsd_reader_has_pointer(reader, at + word)) {
+            melee_host_hsd_reader_fail(reader, "a stage hit holds a pointer");
+            return NULL;
+        }
+    }
+    desc = melee_host_hsd_reader_allocate(reader, sizeof(*desc),
+                                          alignof(lbColl_80008D30_arg1));
     if (desc == NULL) {
         return NULL;
     }
-    if (count > STAGE_DYNAMICS_MAX || (count != 0 && !present)) {
-        melee_host_hsd_reader_fail(reader,
-                                   "stage dynamics have an invalid record list");
-        return NULL;
-    }
-    desc->data = NULL;
-    if (count != 0) {
-        const mh_u32 bytes = count * STAGE_DYNAMICS_RECORD_SIZE;
-        if (melee_host_hsd_reader_extent(reader, target) < bytes) {
-            melee_host_hsd_reader_fail(
-                reader, "stage dynamics records exceed their archive block");
-            return NULL;
-        }
-        desc->data = melee_host_hsd_reader_allocate(
-            reader, bytes, alignof(mh_u32));
-        if (desc->data == NULL) {
-            return NULL;
-        }
-        copy_words(reader, target, desc->data, 0, bytes);
-    }
-    desc->count = count;
-    desc->pos.x = melee_host_hsd_reader_f32(reader, at + 0x8);
-    desc->pos.y = melee_host_hsd_reader_f32(reader, at + 0xC);
-    desc->pos.z = melee_host_hsd_reader_f32(reader, at + 0x10);
-    return melee_host_hsd_reader_failed(reader) ? NULL : desc;
+    copy_words(reader, at, desc, 0, sizeof(*desc));
+    return desc;
 }
 
 static void stage_model(MeleeHostHsdReader* reader, mh_u32 at,
@@ -1770,6 +1939,10 @@ static void* stage_item_entry(MeleeHostHsdReader* reader, mh_u32 at)
     entry->unk0 = (s32) melee_host_hsd_reader_u32(reader, at + 0x0);
     target = target_of(reader, at + 0x4, &present);
     entry->unk4 = present ? item_article(reader, target) : NULL;
+    if (entry->unk4 == NULL) {
+        return melee_host_hsd_reader_failed(reader) ? NULL : entry;
+    }
+    item_kind_special(reader, (mh_u32) entry->unk0, target, entry->unk4);
     return melee_host_hsd_reader_failed(reader) ? NULL : entry;
 }
 

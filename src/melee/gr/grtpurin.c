@@ -37,7 +37,7 @@ StageData grTPr_StageData = {
 };
 
 typedef struct grTPrSpecialParams {
-    DynamicsDesc* x0;
+    struct lbColl_80008D30_arg1* x0;
 } grTPrSpecialParams;
 
 static grTPrSpecialParams* yakumono_param;
@@ -176,7 +176,7 @@ void grTPurin_802234F4(Ground_GObj* gobj)
     return;
 }
 
-DynamicsDesc* grTPurin_802234F8(enum_t arg0)
+struct lbColl_80008D30_arg1* grTPurin_802234F8(enum_t arg0)
 {
     enum_t i;
 

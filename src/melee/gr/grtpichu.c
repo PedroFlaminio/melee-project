@@ -30,7 +30,7 @@
 /* 222E40 */ static bool grTPichu_80222E40(Ground_GObj*);
 /* 222E48 */ static void grTPichu_80222E48(Ground_GObj*);
 /* 222E68 */ static void grTPichu_80222E68(Ground_GObj*);
-/* 222E6C */ static DynamicsDesc* grTPichu_80222E6C(enum_t);
+/* 222E6C */ static struct lbColl_80008D30_arg1* grTPichu_80222E6C(enum_t);
 /* 222E74 */ static bool grTPichu_80222E74(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grTPc_StageCallbacks[] = {
@@ -159,7 +159,7 @@ static void grTPichu_80222E48(Ground_GObj* arg0)
 
 static void grTPichu_80222E68(Ground_GObj* arg0) {}
 
-static DynamicsDesc* grTPichu_80222E6C(enum_t arg0)
+static struct lbColl_80008D30_arg1* grTPichu_80222E6C(enum_t arg0)
 {
     return NULL;
 }

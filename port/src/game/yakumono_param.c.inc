@@ -944,13 +944,13 @@ static void* yakumono_mutecity(MeleeHostHsdReader* reader, mh_u32 root)
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0x8, &target)) {
         out->x8 =
-            stage_dynamics_desc(reader, target);
+            stage_hit_desc(reader, target);
     } else {
         out->x8 = NULL;
     }
     if (melee_host_hsd_reader_pointer(reader, root + 0xC, &target)) {
         out->xC =
-            stage_dynamics_desc(reader, target);
+            stage_hit_desc(reader, target);
     } else {
         out->xC = NULL;
     }

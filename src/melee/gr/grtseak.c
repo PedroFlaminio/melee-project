@@ -30,7 +30,7 @@
 /* 223B0C */ static bool grTSeak_80223B0C(Ground_GObj*);
 /* 223B14 */ static void grTSeak_80223B14(Ground_GObj*);
 /* 223B34 */ static void grTSeak_80223B34(Ground_GObj*);
-/* 223B38 */ static DynamicsDesc* grTSeak_OnTouchLine(enum_t);
+/* 223B38 */ static struct lbColl_80008D30_arg1* grTSeak_OnTouchLine(enum_t);
 /* 223B40 */ static bool grTSeak_OnCheckShadowRender(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grTSk_StageCallbacks[] = {
@@ -157,7 +157,7 @@ void grTSeak_80223B14(Ground_GObj* gobj)
 
 void grTSeak_80223B34(Ground_GObj* gobj) {}
 
-DynamicsDesc* grTSeak_OnTouchLine(enum_t arg0)
+struct lbColl_80008D30_arg1* grTSeak_OnTouchLine(enum_t arg0)
 {
     return NULL;
 }

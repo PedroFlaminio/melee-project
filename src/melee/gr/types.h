@@ -81,7 +81,7 @@ struct StageInfo {
     u8 xA4_pad[0x12C - 0xA4];
     HSD_GObj* x12C;
     Vec3 x130, x13C, x148, x154, x160, x16C;
-    DynamicsDesc* (*on_touch_line)(int);
+    struct lbColl_80008D30_arg1* (*on_touch_line)(int);
     bool (*on_check_shadow_render)(Vec3* fighter_pos, int, HSD_JObj*);
     Ground_GObj* map_gobjs[64];
     HSD_JObj* x280[261];
@@ -578,6 +578,7 @@ struct grVenom_GroundVars2 {
             u8 b7 : 1;
         };
     } xE0_state;
+    /* gp+E4 */ f32 xE4;
 };
 
 struct grArwing_GroundVars {
@@ -1392,6 +1393,17 @@ struct grBigBlue_PlatformVars {
     /* gp+EC */ f32 xEC;
 };
 
+/// Falcon Flyer state (gobj ID 35).
+struct grBigBlue_FlyerVars {
+    /* gp+C4 */ u8 state;
+    /* gp+C5 */ u8 pad_C5[3];
+    /* gp+C8 */ s32 timer;
+    /* gp+CC */ f32 target_rot;
+    /* gp+D0 */ f32 target_y;
+    /* gp+D4 */ f32 xD4;
+    /* gp+D8 */ f32 speed;
+};
+
 /// Moving road gobj state (gobj ID 34).
 struct grBigBlue_RoadVars {
     /* gp+C4 */ u32 flags;
@@ -1488,17 +1500,21 @@ struct grBigBlue_GroundVars {
                     /* +3 gp+C7:4 */ u32 nibble_lo : 4;
                 };
             };
+            /* The manager's event_data[3] and event_extra: the same
+             * words, kept pointer-wide so that data[] lands where the
+             * manager view puts it on the host too. */
             /*  +4 gp+C8 */ void* xC8;
             /*  +8 gp+CC */ void* xCC;
-            /*  +C gp+D0 */ f32 xD0;
+            /*  +C gp+D0 */ void* xD0;
             /* +10 gp+D4 */ HSD_JObj* xD4[3];
-            /* pad */ char pad_3[4];
+            /* +1C gp+E0 */ void* xE0;
             /* +20 gp+E4 */ struct grBigBlue_GroundData data[3];
         };
         struct grBigBlue_ManagerVars manager;
         struct grBigBlue_PlatformVars platform;
         struct grBigBlue_RoadVars road;
         struct grBigBlue_CarVars car;
+        struct grBigBlue_FlyerVars flyer;
     };
 };
 

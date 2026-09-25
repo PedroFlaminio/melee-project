@@ -32,7 +32,7 @@ void grTZelda_80224084(Ground_GObj*);                     /* static */
 bool grTZelda_802240D4(Ground_GObj*);                     /* static */
 void grTZelda_802240DC(Ground_GObj*);                     /* static */
 void grTZelda_802240FC(Ground_GObj*);                     /* static */
-DynamicsDesc* grTZelda_OnTouchLine(enum_t);               /* static */
+struct lbColl_80008D30_arg1* grTZelda_OnTouchLine(enum_t);               /* static */
 bool grTZelda_OnCheckShadowRender(Vec3*, int, HSD_JObj*); /* static */
 
 static StageCallbacks grTZd_StageCallbacks[4] = {
@@ -144,7 +144,7 @@ void grTZelda_802240DC(Ground_GObj* gobj)
 
 void grTZelda_802240FC(Ground_GObj* gobj) {}
 
-DynamicsDesc* grTZelda_OnTouchLine(enum_t arg0)
+struct lbColl_80008D30_arg1* grTZelda_OnTouchLine(enum_t arg0)
 {
     return NULL;
 }

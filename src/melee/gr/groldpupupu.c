@@ -762,7 +762,7 @@ void grOldPupupu_80211C1C(Ground_GObj* gobj)
 
 void grOldPupupu_80211C9C(Ground_GObj* arg) {}
 
-DynamicsDesc* grOldPupupu_80211CA0(enum_t gobj)
+struct lbColl_80008D30_arg1* grOldPupupu_80211CA0(enum_t gobj)
 {
     return false;
 }

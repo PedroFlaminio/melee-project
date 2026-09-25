@@ -39,7 +39,7 @@
                                      mpLib_GroundEnum ground_kind,
                                      float delta_y);
 /* 1D8134 */ static int fn_801D8134(HSD_GObj* arg0, HSD_GObj* arg1);
-/* 1D8444 */ static DynamicsDesc* grKongo_801D8444(enum_t);
+/* 1D8444 */ static struct lbColl_80008D30_arg1* grKongo_801D8444(enum_t);
 
 GrJoint grKg_803E16E0[] = {
     { 2, 10, 19 }, { 3, 10, 22 }, { 5, 10, 43 },
@@ -1121,42 +1121,49 @@ void grKongo_801D77E0(HSD_GObj* gobj, s32 arg1)
         gp->u.kongo.xD4 = 0.0f;
         gp->u.kongo.xD8 = 0.0f;
     } else {
-        Ground* q = gp;
-        for (i = 2; i != 0; i--) {
-            if (q->u.kongo.xC4 > 0.0f) {
-                if (q->u.kongo.xC8 > 0.0f) {
+        /* Two swings, xC4/xC8 and xD4/xD8.  This used to step from one to
+         * the other by adding 0x10 to the Ground pointer, the size of a
+         * swing with its two JObjs while a pointer is four bytes. */
+        f32* angles[2];
+        f32* vels[2];
+        angles[0] = &gp->u.kongo.xC4;
+        vels[0] = &gp->u.kongo.xC8;
+        angles[1] = &gp->u.kongo.xD4;
+        vels[1] = &gp->u.kongo.xD8;
+        for (i = 0; i < 2; i++) {
+            if (*angles[i] > 0.0f) {
+                if (*vels[i] > 0.0f) {
                     step = 0.017453292f * yakumono_param->unkB4;
                 } else {
                     step = (0.017453292f * yakumono_param->unkB4) / 2.0f;
                 }
-                q->u.kongo.xC8 -= step;
-            } else if (q->u.kongo.xC4 < 0.0f) {
-                if (q->u.kongo.xC8 < 0.0f) {
+                *vels[i] -= step;
+            } else if (*angles[i] < 0.0f) {
+                if (*vels[i] < 0.0f) {
                     step = 0.017453292f * yakumono_param->unkB4;
                 } else {
                     step = (0.017453292f * yakumono_param->unkB4) / 2.0f;
                 }
-                q->u.kongo.xC8 += step;
+                *vels[i] += step;
             }
-            q->u.kongo.xC4 += q->u.kongo.xC8;
+            *angles[i] += *vels[i];
             limit = 0.017453292f * (yakumono_param->unkB8 -
                                     0.017453292f * yakumono_param->unkAC);
-            if (q->u.kongo.xC4 > limit) {
-                q->u.kongo.xC4 = limit;
-                q->u.kongo.xC8 = 0.0f;
-            } else if (q->u.kongo.xC4 < -limit) {
-                q->u.kongo.xC4 = -limit;
-                q->u.kongo.xC8 = 0.0f;
-            } else if (ABS(q->u.kongo.xC4) <
+            if (*angles[i] > limit) {
+                *angles[i] = limit;
+                *vels[i] = 0.0f;
+            } else if (*angles[i] < -limit) {
+                *angles[i] = -limit;
+                *vels[i] = 0.0f;
+            } else if (ABS(*angles[i]) <
                        0.017453292f * yakumono_param->unkB4)
             {
-                if (ABS(q->u.kongo.xC8) < 0.017453292f * yakumono_param->unkB4)
+                if (ABS(*vels[i]) < 0.017453292f * yakumono_param->unkB4)
                 {
-                    q->u.kongo.xC4 = 0.0f;
-                    q->u.kongo.xC8 = 0.0f;
+                    *angles[i] = 0.0f;
+                    *vels[i] = 0.0f;
                 }
             }
-            q = (Ground*) ((u8*) q + 0x10);
         }
     }
     HSD_JObjSetRotationZ(gp->u.kongo3.xCC, gp->u.kongo.xC4);
@@ -1519,7 +1526,7 @@ f32 grKongo_801D8314(void)
     return var_f31;
 }
 
-DynamicsDesc* grKongo_801D8444(enum_t arg)
+struct lbColl_80008D30_arg1* grKongo_801D8444(enum_t arg)
 {
     return NULL;
 }

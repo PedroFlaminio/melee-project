@@ -1894,7 +1894,7 @@ void grCastle_801D0A9C(Vec3* arg0, f32 arg8)
     }
 }
 
-DynamicsDesc* grCastle_801D0B04(enum_t arg)
+struct lbColl_80008D30_arg1* grCastle_801D0B04(enum_t arg)
 {
     return NULL;
 }

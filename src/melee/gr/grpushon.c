@@ -43,11 +43,11 @@ struct grPushOn_LightConfig {
 
 struct grPushon_YakumonoParam {
     s32 x0;
-    DynamicsDesc* x4;
-    DynamicsDesc* x8;
-    DynamicsDesc* xC;
-    DynamicsDesc* x10;
-    DynamicsDesc* x14;
+    struct lbColl_80008D30_arg1* x4;
+    struct lbColl_80008D30_arg1* x8;
+    struct lbColl_80008D30_arg1* xC;
+    struct lbColl_80008D30_arg1* x10;
+    struct lbColl_80008D30_arg1* x14;
     bool x18;
     struct grPushOn_Entry x1c[0x1E];
     struct grPushOn_Lookup x10c[0x21];
@@ -701,7 +701,7 @@ s32 fn_802192A4(void* arg0, HSD_GObj* gobj, s32* result)
     return 0;
 }
 
-DynamicsDesc* grPushOn_80219458(enum_t arg0)
+struct lbColl_80008D30_arg1* grPushOn_80219458(enum_t arg0)
 {
     s32 joint;
     s32 kind;

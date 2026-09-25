@@ -85,6 +85,24 @@ int melee_host_test_check_item_public_data(void* translated, char* message,
         CHECK(bomb->x20.x == 0.8f && bomb->x20.y == 0.7f);
         CHECK(bomb->x20.z == 0.0f);
     }
+    /* Food: each food's model is widened, and the fields after it keep
+     * their values rather than their disc offsets. */
+    CHECK(data->x4[It_Kind_Foods] != NULL);
+    {
+        const itFoodsAttributes* const foods =
+            data->x4[It_Kind_Foods]->x4_specialAttributes;
+        CHECK(foods != NULL &&
+              (void*) foods != (void*) &melee_host_item_data_left_out);
+        CHECK(foods->count == 2);
+        CHECK(foods->foods[0].joint != NULL && foods->foods[1].joint != NULL);
+        CHECK(foods->foods[0].joint != foods->foods[1].joint);
+        CHECK(foods->foods[0].heal_amount == 5);
+        CHECK(foods->foods[0].x_offset == 5.0f);
+        CHECK(foods->foods[0].y_offset == -11.0f);
+        CHECK(foods->foods[1].heal_amount == 9);
+        CHECK(foods->foods[1].x_offset == 3.5f);
+        CHECK(foods->foods[1].y_offset == -8.5f);
+    }
     CHECK(first->x14_dynamics == NULL);
     CHECK(character->x4_specialAttributes == NULL);
     CHECK((void*) character->x14_dynamics ==

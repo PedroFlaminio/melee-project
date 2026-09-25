@@ -1180,7 +1180,7 @@ void grBigBlueRoute_8020DED4(Vec3* pos)
     Ground_801C38BC(x, y);
 }
 
-DynamicsDesc* grBigBlueRoute_8020DF78(enum_t arg)
+struct lbColl_80008D30_arg1* grBigBlueRoute_8020DF78(enum_t arg)
 {
     return NULL;
 }

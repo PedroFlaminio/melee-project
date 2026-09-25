@@ -32,7 +32,7 @@
 /* 2218F0 */ static bool grTKoopa_802218F0(Ground_GObj*);
 /* 2218F8 */ static void grTKoopa_802218F8(Ground_GObj*);
 /* 221918 */ static void grTKoopa_80221918(Ground_GObj*);
-/* 22191C */ static DynamicsDesc* grTKoopa_8022191C(enum_t);
+/* 22191C */ static struct lbColl_80008D30_arg1* grTKoopa_8022191C(enum_t);
 /* 221924 */ static bool grTKoopa_80221924(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grTKp_StageCallbacks[] = {
@@ -159,7 +159,7 @@ static void grTKoopa_802218F8(Ground_GObj* arg0)
 
 static void grTKoopa_80221918(Ground_GObj* arg0) {}
 
-static DynamicsDesc* grTKoopa_8022191C(enum_t arg0)
+static struct lbColl_80008D30_arg1* grTKoopa_8022191C(enum_t arg0)
 {
     return NULL;
 }

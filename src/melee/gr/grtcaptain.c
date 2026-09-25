@@ -33,7 +33,7 @@ static void grTCaptain_8021FEB8(Ground_GObj* gobj);
 static bool grTCaptain_8021FF08(Ground_GObj*);
 static void grTCaptain_8021FF10(Ground_GObj*);
 static void grTCaptain_8021FF30(Ground_GObj*);
-static DynamicsDesc* grTCaptain_OnTouchLine(enum_t);
+static struct lbColl_80008D30_arg1* grTCaptain_OnTouchLine(enum_t);
 static bool grTCaptain_OnCheckShadowRender(Vec3*, int, HSD_JObj*);
 
 static StageCallbacks grTCa_StageCallbacks[] = {
@@ -161,7 +161,7 @@ static void grTCaptain_8021FF10(Ground_GObj* arg0)
 
 static void grTCaptain_8021FF30(Ground_GObj* argo) {}
 
-static DynamicsDesc* grTCaptain_OnTouchLine(enum_t arg0)
+static struct lbColl_80008D30_arg1* grTCaptain_OnTouchLine(enum_t arg0)
 {
     return NULL;
 }

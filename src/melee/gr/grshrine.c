@@ -34,7 +34,7 @@ static void grShrine_80201E9C(Ground_GObj*);
 static bool grShrine_80201F14(Ground_GObj*);
 static void grShrine_80201F1C(Ground_GObj*);
 static void grShrine_80201F40(Ground_GObj*);
-static DynamicsDesc* grShrine_80201F44(enum_t);
+static struct lbColl_80008D30_arg1* grShrine_80201F44(enum_t);
 static bool grShrine_80201F4C(Vec3*, int, HSD_JObj*);
 
 static void* yakumono_param;
@@ -173,7 +173,7 @@ static void grShrine_80201F1C(Ground_GObj* arg0)
 
 static void grShrine_80201F40(Ground_GObj* arg0) {}
 
-static DynamicsDesc* grShrine_80201F44(enum_t arg0)
+static struct lbColl_80008D30_arg1* grShrine_80201F44(enum_t arg0)
 {
     return NULL;
 }

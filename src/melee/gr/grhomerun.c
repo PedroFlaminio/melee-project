@@ -960,7 +960,7 @@ void grHomeRun_8021EDD4(void)
     grHr_804D6AE4 = ratio / (num_ticks * dist);
 }
 
-DynamicsDesc* grHomeRun_8021EEB4(enum_t arg)
+struct lbColl_80008D30_arg1* grHomeRun_8021EEB4(enum_t arg)
 {
     return NULL;
 }

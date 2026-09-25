@@ -2803,7 +2803,7 @@ f32 grCorneria_801E2EA0(void)
     return 0.0f;
 }
 
-DynamicsDesc* grCorneria_801E2EE4(enum_t arg)
+struct lbColl_80008D30_arg1* grCorneria_801E2EE4(enum_t arg)
 {
     return NULL;
 }
