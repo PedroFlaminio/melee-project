@@ -140,6 +140,9 @@ void* melee_host_hsd_reader_mat_anim_joint(MeleeHostHsdReader* reader,
                                            mh_u32 offset);
 void* melee_host_hsd_reader_shape_anim_joint(MeleeHostHsdReader* reader,
                                              mh_u32 offset);
+/* The FigaTree at `offset`: a fighter animation in the game's flat format. */
+void* melee_host_hsd_reader_figa_tree(MeleeHostHsdReader* reader,
+                                      mh_u32 offset);
 /* The bytes from `offset` to the next address a relocation targets or a public
  * symbol names: the most that a block recording no length can hold. */
 mh_u32 melee_host_hsd_reader_extent(MeleeHostHsdReader* reader, mh_u32 offset);

@@ -789,6 +789,31 @@ bool melee_host_sss_force_stage(int stkind)
     sss_data->force_stage_id = (s8) stkind;
     return true;
 }
+
+/* The character a port takes into the match, written where the character
+ * select left its choice.  The cursor only reaches the characters a save
+ * unlocks and needs the icon layout; this reaches all 26.  A CPU level of 0
+ * leaves the port's kind alone, 1 to 9 makes it a CPU at that level.  Only
+ * valid while the select screen is the running scene; false otherwise. */
+bool melee_host_sss_force_character(int port, int ckind, int cpu_level)
+{
+    PlayerInitData* player;
+
+    if (sss_data == NULL || port < 0 || port >= GM_MAX_PLAYERS ||
+        ckind < 0 || ckind >= CKind_Playable_Count || cpu_level < 0 ||
+        cpu_level > 9)
+    {
+        return false;
+    }
+    player = &sss_data->vs.start.players[port];
+    player->ckind = (s8) ckind;
+    player->color = 0;
+    if (cpu_level != 0) {
+        player->slot_type = Gm_PKind_Cpu;
+        player->cpu_level = (u8) cpu_level;
+    }
+    return true;
+}
 #endif
 
 /// OnFrame

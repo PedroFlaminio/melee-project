@@ -309,6 +309,7 @@ public:
     translator_light_built_at(std::uint32_t data_offset) const;
     [[nodiscard]] HSD_MObjDesc* translator_mobj(std::uint32_t data_offset);
     [[nodiscard]] HSD_Spline* translator_spline(std::uint32_t data_offset);
+    [[nodiscard]] FigaTree* translator_figa_tree(std::uint32_t data_offset);
 
 private:
     MaterializedLightList** light_list_table(HsdRuntimeNode table);

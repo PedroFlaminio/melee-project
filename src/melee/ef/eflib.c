@@ -1422,8 +1422,9 @@ void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
 {
     s32 idx;
 
-    // WHY
-    EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+    /* efLib_ParamTable, which follows efLib_AnimQueue on the console; this
+     * used to reach it as efLib_AnimQueue + 0x10. */
+    EF_ParamEntry* base = efLib_ParamTable;
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1438,17 +1439,17 @@ void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
     return;
 
 found:
-    // WHY
-    efLib_AnimQueue[idx + 0x10].gobj = gobj;
-    efLib_AnimQueue[idx + 0x10].alpha = alpha;
+    efLib_ParamTable[idx].gobj = gobj;
+    efLib_ParamTable[idx].alpha = alpha;
 }
 
 void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
 {
     s32 idx;
 
-    // WHY
-    EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+    /* efLib_ParamTable, which follows efLib_AnimQueue on the console; this
+     * used to reach it as efLib_AnimQueue + 0x10. */
+    EF_ParamEntry* base = efLib_ParamTable;
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1463,9 +1464,8 @@ void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
     return;
 
 found:
-    // WHY
-    efLib_AnimQueue[idx + 0x10].gobj = gobj;
-    efLib_AnimQueue[idx + 0x10].gfx_id = gfx_id;
+    efLib_ParamTable[idx].gobj = gobj;
+    efLib_ParamTable[idx].gfx_id = gfx_id;
 }
 
 void efLib_Cb_ApplyStoredAlpha(EF_Effect* effect)

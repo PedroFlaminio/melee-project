@@ -1202,6 +1202,9 @@ void ftYs_SpecialAirSStart_1_Coll(Fighter_GObj* gobj)
 static inline void stack_pad_hack(void)
 {
     /// @todo egregious stack padding hack
+#ifndef MELEE_HOST
+    /* Reads NULL->user_data, which the GameCube maps and the host does
+     * not. */
     GET_FIGHTER(NULL);
     GET_FIGHTER(NULL);
     GET_FIGHTER(NULL);
@@ -1209,6 +1212,7 @@ static inline void stack_pad_hack(void)
     GET_FIGHTER(NULL);
     GET_FIGHTER(NULL);
     GET_FIGHTER(NULL);
+#endif
 }
 
 void ftYs_SpecialAirSLoop_2_Coll(Fighter_GObj* gobj)

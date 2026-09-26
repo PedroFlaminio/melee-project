@@ -2559,6 +2559,7 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
     DmgLogEntry* entry;
     DmgLogEntry* entries;
     struct DmgResult* out;
+    struct DmgResult result;
     Fighter* fp;
     int i;
     int best_idx;
@@ -2829,7 +2830,10 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
         }
     }
 
-    out = (struct DmgResult*) dmg_ptr;
+    /* The result used to be written straight over dmg_ptr, which on the host
+     * puts `source` and `damage` past the Fighter fields they stand for; it
+     * is built here and copied field by field below. */
+    out = &result;
     best_entry = &entries[best_idx];
 
     switch (best_entry->x0) {
@@ -2914,6 +2918,27 @@ void ftColl_8007A06C(Fighter_GObj* gobj, void* dmg_ptr, void* log, size_t idx,
     out->source = best_entry->gobj;
     out->damage = best_entry->x20;
     out->sfx_severity = sfx_severity;
+    if (dmg_ptr == &fp->dmg.facing_dir_1) {
+        fp->dmg.facing_dir_1 = out->dir;
+        fp->dmg.x1848_kb_angle = out->angle;
+        fp->dmg.x184c_damaged_hurtbox = out->hurt_height;
+        fp->dmg.kb_applied = out->kb;
+        fp->dmg.x1854_collpos = out->pos;
+        fp->dmg.x1860_element = out->element;
+        fp->dmg.x1864 = out->sfx_severity;
+        fp->dmg.x1868_source = out->source;
+        fp->dmg.x186c = out->damage;
+    } else {
+        fp->dmg.x1870 = out->dir;
+        fp->dmg.x1874 = out->angle;
+        fp->dmg.x1878 = out->hurt_height;
+        fp->dmg.x187c = out->kb;
+        fp->dmg.x1880 = out->pos;
+        fp->dmg.x188c = out->element;
+        fp->dmg.x1890 = out->sfx_severity;
+        fp->dmg.x1894 = out->source;
+        fp->dmg.x1898 = out->damage;
+    }
 
     switch (best_entry->x0) {
     case 1: {

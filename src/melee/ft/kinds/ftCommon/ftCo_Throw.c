@@ -364,8 +364,8 @@ void ftCo_ThrowB_Phys(Fighter_GObj* gobj)
     if (fp->ground_or_air == GA_Air) {
         if (fp->mv.co.fighterthrow.x4 != 0) {
             fp->self_vel.x =
-                fp->mv.co.fighterthrow.self_vel_x * fp->facing_dir;
-            fp->self_vel.y = fp->mv.co.fighterthrow.self_vel_y;
+                fp->mv.co.throw_.xC.z * fp->facing_dir;
+            fp->self_vel.y = fp->mv.co.throw_.xC.y;
         } else {
             ft_80085134(gobj);
         }
@@ -410,8 +410,8 @@ void ftCo_ThrowHi_Phys(Fighter_GObj* gobj)
     if (fp->ground_or_air == GA_Air) {
         if (fp->mv.co.fighterthrow.x4 != 0) {
             fp->self_vel.x =
-                fp->mv.co.fighterthrow.self_vel_x * fp->facing_dir;
-            fp->self_vel.y = fp->mv.co.fighterthrow.self_vel_y;
+                fp->mv.co.throw_.xC.z * fp->facing_dir;
+            fp->self_vel.y = fp->mv.co.throw_.xC.y;
         } else {
             ft_80085134(gobj);
         }
@@ -466,8 +466,8 @@ void ftCo_ThrowLw_Phys(Fighter_GObj* gobj)
     if (fp->ground_or_air == GA_Air) {
         if (fp->mv.co.fighterthrow.x4 != 0) {
             fp->self_vel.x =
-                fp->mv.co.fighterthrow.self_vel_x * fp->facing_dir;
-            fp->self_vel.y = fp->mv.co.fighterthrow.self_vel_y;
+                fp->mv.co.throw_.xC.z * fp->facing_dir;
+            fp->self_vel.y = fp->mv.co.throw_.xC.y;
         } else {
             ft_80085134(gobj);
         }

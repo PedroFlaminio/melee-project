@@ -3065,6 +3065,32 @@ static FtPartsVisLookup* fighter_vis_lookup(MeleeHostHsdReader* reader,
     return melee_host_hsd_reader_failed(reader) ? NULL : lookups;
 }
 
+/* A FtPartsDesc's visibility table: rows of four lookups, each one per
+ * model, running to the next object on the disc. */
+static void* (*fighter_vis_table(MeleeHostHsdReader* reader, mh_u32 target,
+                                 u32 model_num))[4]
+{
+    const mh_u32 rows = melee_host_hsd_reader_extent(reader, target) / 16;
+    void* (*const table)[4] = melee_host_hsd_reader_allocate(
+        reader, sizeof(void* [4]) * (rows == 0 ? 1 : rows), alignof(void*));
+    mh_u32 row;
+
+    if (table == NULL) {
+        return NULL;
+    }
+    for (row = 0; row < rows; row++) {
+        mh_u32 column;
+        for (column = 0; column < 4; column++) {
+            bool listed;
+            const mh_u32 lookup =
+                target_of(reader, target + row * 16 + column * 4, &listed);
+            table[row][column] =
+                listed ? fighter_vis_lookup(reader, lookup, model_num) : NULL;
+        }
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : table;
+}
+
 static struct ftData_x8* fighter_parts(MeleeHostHsdReader* reader, mh_u32 at)
 {
     struct ftData_x8* const parts = melee_host_hsd_reader_allocate(
@@ -3084,25 +3110,10 @@ static struct ftData_x8* fighter_parts(MeleeHostHsdReader* reader, mh_u32 at)
     parts->x0.model_num = model_num;
     target = target_of(reader, at + 0x4, &present);
     if (present) {
-        const mh_u32 rows = melee_host_hsd_reader_extent(reader, target) / 16;
-        void* (*const table)[4] = melee_host_hsd_reader_allocate(
-            reader, sizeof(void* [4]) * rows, alignof(void*));
-        mh_u32 row;
-        if (table == NULL) {
+        parts->x0.vis_table = fighter_vis_table(reader, target, model_num);
+        if (parts->x0.vis_table == NULL) {
             return NULL;
         }
-        for (row = 0; row < rows; row++) {
-            mh_u32 column;
-            for (column = 0; column < 4; column++) {
-                bool listed;
-                const mh_u32 lookup =
-                    target_of(reader, target + row * 16 + column * 4, &listed);
-                table[row][column] =
-                    listed ? fighter_vis_lookup(reader, lookup, model_num)
-                           : NULL;
-            }
-        }
-        parts->x0.vis_table = table;
     }
     parts->x8.x8 = tobjs;
     target = target_of(reader, at + 0xC, &present);
@@ -3340,15 +3351,341 @@ static struct ftDynamics* fighter_dynamics(MeleeHostHsdReader* reader,
     dynamics->x4 = (int) melee_host_hsd_reader_u32(reader, at + 0x8);
     target = target_of(reader, at + 0xC, &present);
     dynamics->x8 = present ? scalar_extent(reader, target) : NULL;
-    (void) target_of(reader, at + 0x10, &present);
+    /* x10: a table indexed by an animation's blend slot, each entry NULL or
+     * one FigaTree per dynamic bone (ftCo_8009E4A8).  The table records no
+     * length; it runs to the next object on the disc. */
+    target = target_of(reader, at + 0x10, &present);
+    dynamics->x10 = NULL;
     if (present) {
-        melee_host_hsd_reader_fail(reader,
-                                   "fighter dynamics that name animation trees "
-                                   "are not translated yet");
-        return NULL;
+        const mh_u32 slots = melee_host_hsd_reader_extent(reader, target) / 4;
+        FigaTree*** const table = melee_host_hsd_reader_allocate(
+            reader, sizeof(*table) * (slots == 0 ? 1 : slots),
+            alignof(FigaTree**));
+        mh_u32 slot;
+
+        if (table == NULL) {
+            return NULL;
+        }
+        for (slot = 0; slot < slots; slot++) {
+            bool listed;
+            mh_u32 trees;
+            s32 i;
+
+            table[slot] = NULL;
+            /* The extent can run into the scalars that follow the table;
+             * only a relocated word is an entry. */
+            if (!melee_host_hsd_reader_has_pointer(reader,
+                                                   target + slot * 4))
+            {
+                continue;
+            }
+            trees = target_of(reader, target + slot * 4, &listed);
+            table[slot] = melee_host_hsd_reader_allocate(
+                reader, sizeof(FigaTree*) * (size_t) (count == 0 ? 1 : count),
+                alignof(FigaTree*));
+            if (table[slot] == NULL) {
+                return NULL;
+            }
+            for (i = 0; i < count; i++) {
+                bool tree_listed = false;
+                mh_u32 tree = 0;
+                if (melee_host_hsd_reader_has_pointer(
+                        reader, trees + (mh_u32) i * 4))
+                {
+                    tree = target_of(reader, trees + (mh_u32) i * 4,
+                                     &tree_listed);
+                }
+                table[slot][i] =
+                    tree_listed ? melee_host_hsd_reader_figa_tree(reader, tree)
+                                : NULL;
+            }
+        }
+        dynamics->x10 = table;
     }
     return melee_host_hsd_reader_failed(reader) ? NULL : dynamics;
 }
+
+/* ftDataKirbyCopy<X> (PlKbCp*.dat): what Kirby needs to use the neutral
+ * special he copies from X.  ftKb_SpecialN_800EED50 stores each in slot X of
+ * ft_80459B88, which the game reads as KirbyHatStruct (hats[j] is slot j+1)
+ * or, for slot 0, as Kirby_Unk: the same layout.
+ *
+ * Two shapes on the disc.  Most start with the hat joint and a FtPartsDesc,
+ * then up to seven fields the game casts to whatever that copy needs.  Donkey
+ * Kong, Jigglypuff, Mewtwo, Falco and Mr. Game & Watch start instead with a
+ * whole struct ftData_x8 (FtPartsDesc and its texture rows), which LOAD_HAT
+ * reads through (FtPartsDesc*) hat and &hat->desc.vis_table; built as the
+ * host's ftData_x8, it lands on those same host fields.  The fields after
+ * that are a part mask kept in a pointer, the hat's root joint and more.
+ *
+ * Each field's type comes from its reader in ftkirby.c, ftdynamics.c and the
+ * ftkirbyspecial*.c files; see kirby_copy_schemas.  A pointer where a schema
+ * expects none fails the translation rather than being guessed. */
+enum {
+    KIRBY_COPY_FIELDS_MAX = 7,
+};
+
+typedef struct KirbyCopySchema {
+    const char* symbol;
+    bool parts;         /* starts with a whole struct ftData_x8 */
+    const char* fields; /* hat_dynamics[0..]: see kirby_copy_field */
+    /* For each Article in `fields`, the translator of its special
+     * attributes: s scalars only, a Link's arrow, c the Game & Watch chef, g
+     * another Game & Watch item.  The items are the originals' own code
+     * (it_8026B3F8 registers them under the Kirby kinds), so they read the
+     * same layouts. */
+    const char* specials;
+} KirbyCopySchema;
+
+static void* item_generic_scalar_attrs(MeleeHostHsdReader* reader, mh_u32 at);
+static void* link_arrow_attrs(MeleeHostHsdReader* reader, mh_u32 at);
+static void* gamewatch_chef_attrs(MeleeHostHsdReader* reader, mh_u32 at);
+static void* gamewatch_item_attrs(MeleeHostHsdReader* reader, mh_u32 at);
+
+/* Field codes: A an item Article, D ftDynamics, J HSD_Joint, N
+ * HSD_AnimJoint, M a u32 part mask kept in the pointer, V a
+ * FtPartsVisLookup, S three scalar words (ftKb_GameWatchHatWords), R the
+ * texture rows ftData_x8 already holds, '-' nothing. */
+static const KirbyCopySchema kirby_copy_schemas[] = {
+    { "ftDataKirbyCopyMario", false, "A", "s" },
+    { "ftDataKirbyCopyFox", false, "AA", "ss" },
+    { "ftDataKirbyCopyCaptain", false, "", "" },
+    { "ftDataKirbyCopyDonkey", true, "RMJ", "" },
+    { "ftDataKirbyCopyKoopa", false, "AD", "s" },
+    { "ftDataKirbyCopyLink", false, "AAD", "as" },
+    { "ftDataKirbyCopySeak", false, "AAD", "ss" },
+    { "ftDataKirbyCopyNess", false, "AA", "ss" },
+    { "ftDataKirbyCopyPeach", false, "AA", "ss" },
+    { "ftDataKirbyCopyPopo", false, "AJ", "s" },
+    { "ftDataKirbyCopyPikachu", false, "AAD", "ss" },
+    { "ftDataKirbyCopySamus", false, "A", "s" },
+    { "ftDataKirbyCopyYoshi", false, "JNNNNA", "s" },
+    { "ftDataKirbyCopyPurin", true, "RMJD", "" },
+    { "ftDataKirbyCopyMewtwo", true, "RMJAD", "s" },
+    { "ftDataKirbyCopyLuigi", false, "A", "s" },
+    { "ftDataKirbyCopyMars", false, "JD", "" },
+    { "ftDataKirbyCopyZelda", false, "D", "" },
+    { "ftDataKirbyCopyClink", false, "AAD", "as" },
+    { "ftDataKirbyCopyDrmario", false, "A", "s" },
+    { "ftDataKirbyCopyFalco", true, "RMJAA", "ss" },
+    { "ftDataKirbyCopyPichu", false, "AAD", "ss" },
+    { "ftDataKirbyCopyGamewatch", true, "RM-VSAA", "cg" },
+    { "ftDataKirbyCopyGanon", false, "", "" },
+    { "ftDataKirbyCopyEmblem", false, "JD", "" },
+};
+
+_Static_assert(offsetof(KirbyHatStruct, hat_dynamics) ==
+                   offsetof(struct ftData_x8, x8.xC),
+               "a copy that starts with ftData_x8 keeps its texture rows in "
+               "hat_dynamics[0]");
+
+static void* kirby_copy_article(MeleeHostHsdReader* reader, mh_u32 at,
+                                char special)
+{
+    Article* const article = item_article(reader, at);
+    bool present;
+    const mh_u32 attrs = target_of(reader, at + 0x04, &present);
+    void* (*translate)(MeleeHostHsdReader*, mh_u32);
+
+    if (article == NULL || !present) {
+        return article;
+    }
+    switch (special) {
+    case 's':
+        translate = item_generic_scalar_attrs;
+        break;
+    case 'a':
+        translate = link_arrow_attrs;
+        break;
+    case 'c':
+        translate = gamewatch_chef_attrs;
+        break;
+    case 'g':
+        translate = gamewatch_item_attrs;
+        break;
+    default:
+        melee_host_hsd_reader_fail(reader, "a Kirby copy Article has no "
+                                           "special attribute translator");
+        return NULL;
+    }
+    article->x4_specialAttributes = translate(reader, attrs);
+    if (article->x4_specialAttributes == NULL) {
+        melee_host_hsd_reader_fail(reader, "a Kirby copy Article's special "
+                                           "attributes do not translate");
+        return NULL;
+    }
+    return article;
+}
+
+static void* kirby_copy_field(MeleeHostHsdReader* reader, char code,
+                              char special, mh_u32 field, u32 model_num)
+{
+    /* Only a relocated word has a target; the mask is a plain word. */
+    bool present = melee_host_hsd_reader_has_pointer(reader, field);
+    const mh_u32 target =
+        present ? target_of(reader, field, &present) : 0;
+
+    switch (code) {
+    case 'M':
+        if (present) {
+            break;
+        }
+        return (void*) (uintptr_t) melee_host_hsd_reader_u32(reader, field);
+    case '-':
+        if (present) {
+            break;
+        }
+        return NULL;
+    default:
+        if (!present) {
+            if (melee_host_hsd_reader_u32(reader, field) != 0) {
+                break;
+            }
+            return NULL;
+        }
+        switch (code) {
+        case 'A':
+            return kirby_copy_article(reader, target, special);
+        case 'D':
+            return fighter_dynamics(reader, target);
+        case 'J':
+            return melee_host_hsd_reader_joint(reader, target);
+        case 'N':
+            return melee_host_hsd_reader_anim_joint(reader, target);
+        case 'V':
+            return fighter_vis_lookup(reader, target, model_num);
+        case 'S':
+            return scalar_block(reader, target,
+                                sizeof(ftKb_GameWatchHatWords));
+        default:
+            break;
+        }
+    }
+    melee_host_hsd_reader_fail(reader,
+                               "a Kirby copy field does not hold what its "
+                               "reader expects");
+    return NULL;
+}
+
+static void* kirby_copy(MeleeHostHsdReader* reader, mh_u32 root,
+                        const KirbyCopySchema* schema)
+{
+    const size_t fields = strlen(schema->fields);
+    const size_t size = offsetof(KirbyHatStruct, hat_dynamics) +
+                        sizeof(void*) * KIRBY_COPY_FIELDS_MAX;
+    unsigned char* const out =
+        melee_host_hsd_reader_allocate(reader, size, alignof(void*));
+    KirbyHatStruct* const hat = (KirbyHatStruct*) out;
+    const mh_u32 extent = melee_host_hsd_reader_extent(reader, root);
+    u32 model_num;
+    size_t articles = 0;
+    size_t i;
+    bool present;
+    mh_u32 target;
+
+    if (out == NULL) {
+        return NULL;
+    }
+    memset(out, 0, size);
+    if (fields > KIRBY_COPY_FIELDS_MAX || extent < 0xC + 4 * fields) {
+        melee_host_hsd_reader_fail(reader,
+                                   "a Kirby copy is shorter than its layout");
+        return NULL;
+    }
+    /* Articles are shared by disc offset within one translation. */
+    item_memo.count = 0;
+    if (schema->parts) {
+        struct ftData_x8* const parts = fighter_parts(reader, root);
+        if (parts == NULL) {
+            return NULL;
+        }
+        /* The FtPartsDesc and its rows; the part bytes after them are
+         * where this copy keeps its mask. */
+        memcpy(out, parts, offsetof(struct ftData_x8, x10));
+        model_num = parts->x0.model_num;
+    } else {
+        model_num = melee_host_hsd_reader_u32(reader, root + 0x4);
+        if (model_num > 11) {
+            melee_host_hsd_reader_fail(reader,
+                                       "a Kirby copy has a bad model count");
+            return NULL;
+        }
+        target = target_of(reader, root + 0x0, &present);
+        hat->hat_joint =
+            present ? melee_host_hsd_reader_joint(reader, target) : NULL;
+        hat->desc.model_num = model_num;
+        target = target_of(reader, root + 0x8, &present);
+        hat->desc.vis_table =
+            present ? fighter_vis_table(reader, target, model_num) : NULL;
+    }
+    for (i = 0; i < fields; i++) {
+        const char code = schema->fields[i];
+        if (code == 'R') {
+            continue;
+        }
+        hat->hat_dynamics[i] = kirby_copy_field(
+            reader, code,
+            code == 'A' ? schema->specials[articles++] : 0,
+            root + 0xC + (mh_u32) i * 4, model_num);
+        if (melee_host_hsd_reader_failed(reader)) {
+            return NULL;
+        }
+    }
+    /* Anything past the schema must be empty. */
+    for (i = 0xC + 4 * fields; i < extent; i += 4) {
+        if (melee_host_hsd_reader_has_pointer(reader, root + (mh_u32) i)) {
+            melee_host_hsd_reader_fail(reader,
+                                       "a Kirby copy holds a pointer past its "
+                                       "layout");
+            return NULL;
+        }
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : out;
+}
+
+#define KIRBY_COPY_TRANSLATOR(index)                                          \
+    static void* kirby_copy_##index(MeleeHostHsdReader* reader, mh_u32 root)  \
+    {                                                                         \
+        return kirby_copy(reader, root, &kirby_copy_schemas[index]);          \
+    }
+KIRBY_COPY_TRANSLATOR(0)
+KIRBY_COPY_TRANSLATOR(1)
+KIRBY_COPY_TRANSLATOR(2)
+KIRBY_COPY_TRANSLATOR(3)
+KIRBY_COPY_TRANSLATOR(4)
+KIRBY_COPY_TRANSLATOR(5)
+KIRBY_COPY_TRANSLATOR(6)
+KIRBY_COPY_TRANSLATOR(7)
+KIRBY_COPY_TRANSLATOR(8)
+KIRBY_COPY_TRANSLATOR(9)
+KIRBY_COPY_TRANSLATOR(10)
+KIRBY_COPY_TRANSLATOR(11)
+KIRBY_COPY_TRANSLATOR(12)
+KIRBY_COPY_TRANSLATOR(13)
+KIRBY_COPY_TRANSLATOR(14)
+KIRBY_COPY_TRANSLATOR(15)
+KIRBY_COPY_TRANSLATOR(16)
+KIRBY_COPY_TRANSLATOR(17)
+KIRBY_COPY_TRANSLATOR(18)
+KIRBY_COPY_TRANSLATOR(19)
+KIRBY_COPY_TRANSLATOR(20)
+KIRBY_COPY_TRANSLATOR(21)
+KIRBY_COPY_TRANSLATOR(22)
+KIRBY_COPY_TRANSLATOR(23)
+KIRBY_COPY_TRANSLATOR(24)
+
+static void* (*const kirby_copy_translators[])(MeleeHostHsdReader*, mh_u32) = {
+    kirby_copy_0,  kirby_copy_1,  kirby_copy_2,  kirby_copy_3,  kirby_copy_4,
+    kirby_copy_5,  kirby_copy_6,  kirby_copy_7,  kirby_copy_8,  kirby_copy_9,
+    kirby_copy_10, kirby_copy_11, kirby_copy_12, kirby_copy_13, kirby_copy_14,
+    kirby_copy_15, kirby_copy_16, kirby_copy_17, kirby_copy_18, kirby_copy_19,
+    kirby_copy_20, kirby_copy_21, kirby_copy_22, kirby_copy_23, kirby_copy_24,
+};
+
+_Static_assert(sizeof(kirby_copy_translators) /
+                       sizeof(kirby_copy_translators[0]) ==
+                   sizeof(kirby_copy_schemas) / sizeof(kirby_copy_schemas[0]),
+               "one translator per Kirby copy schema");
 
 static ftData_x30* fighter_hurtboxes(MeleeHostHsdReader* reader, mh_u32 at)
 {
@@ -3409,12 +3746,51 @@ typedef void* (*FighterItemSpecial)(MeleeHostHsdReader* reader, mh_u32 at);
 /* `disc_size` bytes of scalars in a block of `host_size`.  A struct can run
  * past what its disc block holds when the code never reads the rest. */
 
+/* A special attribute block of 4-byte scalars, the struct's layout on the
+ * host too.  A pointer anywhere in it fails the translation by name: this
+ * used to look at the first word only and copy the rest verbatim, handing
+ * the game raw archive offsets as HSD_Joint pointers. */
 static void* item_generic_scalar_attrs(MeleeHostHsdReader* reader, mh_u32 at)
 {
-    if (!melee_host_hsd_reader_has_pointer(reader, at)) {
-        return scalar_extent(reader, at);
+    const mh_u32 extent = melee_host_hsd_reader_extent(reader, at);
+    mh_u32 word;
+
+    for (word = 0; word < extent; word += 4) {
+        if (melee_host_hsd_reader_has_pointer(reader, at + word)) {
+            melee_host_hsd_reader_fail(
+                reader, "an item's special attributes hold a pointer where "
+                        "their translator expects only scalars");
+            return NULL;
+        }
     }
-    return NULL; // Has pointers, generic scalar fails!
+    return scalar_extent(reader, at);
+}
+
+static HSD_Joint* item_special_joint(MeleeHostHsdReader* reader,
+                                     mh_u32 field);
+
+_Static_assert(offsetof(itClimbersStringAttributes, x20) == 0x20,
+               "itClimbersStringAttributes keeps its scalar head");
+
+/* The Ice Climbers' Belay string: scalars, then the models of its links. */
+static void* climbers_string_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    itClimbersStringAttributes* const attrs = melee_host_hsd_reader_allocate(
+        reader, sizeof(*attrs), alignof(itClimbersStringAttributes));
+
+    if (attrs == NULL) {
+        return NULL;
+    }
+    if (melee_host_hsd_reader_extent(reader, at) < 0x2C) {
+        melee_host_hsd_reader_fail(reader, "the Belay string's attributes "
+                                           "are shorter than their layout");
+        return NULL;
+    }
+    memset(attrs, 0, sizeof(*attrs));
+    copy_words(reader, at, attrs, 0x00, 0x24);
+    attrs->x24_joint = item_special_joint(reader, at + 0x24);
+    attrs->x28_joint = item_special_joint(reader, at + 0x28);
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
 }
 
 static void* item_special_scalars(MeleeHostHsdReader* reader, mh_u32 at,
@@ -4027,15 +4403,111 @@ static void* fighter_data_falco(MeleeHostHsdReader* reader, mh_u32 root)
     return fighter_data(reader, root, fighter_falco_attrs, fighter_part_anim_set, &falco_items);
 }
 
+/* The record every Mr. Game & Watch item points its first attribute word
+ * at, which it_8027CE64 keeps in the item's xDD4 and nothing in the game
+ * reads back: pairs of a word and a block, kept as they are. */
+typedef struct GameWatchItemRecord {
+    u32 x0;
+    void* x4;
+} GameWatchItemRecord;
+
+static void* gamewatch_item_record(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    const mh_u32 pairs = melee_host_hsd_reader_extent(reader, at) / 8;
+    GameWatchItemRecord* const record = melee_host_hsd_reader_allocate(
+        reader, sizeof(*record) * (pairs == 0 ? 1 : pairs),
+        alignof(GameWatchItemRecord));
+    mh_u32 i;
+
+    if (record == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < pairs; i++) {
+        bool present;
+        const mh_u32 block = target_of(reader, at + i * 8 + 4, &present);
+        record[i].x0 = melee_host_hsd_reader_u32(reader, at + i * 8);
+        record[i].x4 =
+            present ? melee_host_hsd_reader_payload(
+                          reader, block,
+                          melee_host_hsd_reader_extent(reader, block))
+                    : NULL;
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : record;
+}
+
+/* The attributes of nine of his items: that record alone, read as void**. */
+static void* gamewatch_item_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    void** const attrs =
+        melee_host_hsd_reader_allocate(reader, sizeof(void*), alignof(void*));
+    bool present;
+    const mh_u32 record = target_of(reader, at, &present);
+
+    if (attrs == NULL) {
+        return NULL;
+    }
+    attrs[0] = present ? gamewatch_item_record(reader, record) : NULL;
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
+}
+
+/* The chef's: the record, three floats and a list of pan throws. */
+static void* gamewatch_chef_attrs(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    enum { CHEF_ENTRY_SIZE = 0x14 };
+    const mh_u32 extent = melee_host_hsd_reader_extent(reader, at);
+    const mh_u32 entries =
+        extent > 0x10 ? (extent - 0x10) / CHEF_ENTRY_SIZE : 0;
+    itGamewatchchefAttributes* attrs;
+    bool present;
+    mh_u32 record;
+    mh_u32 i;
+
+    attrs = melee_host_hsd_reader_allocate(
+        reader,
+        offsetof(itGamewatchchefAttributes, entries) +
+            sizeof(itGamewatchchefAttrEntry) * (entries == 0 ? 1 : entries),
+        alignof(itGamewatchchefAttributes));
+    if (attrs == NULL) {
+        return NULL;
+    }
+    record = target_of(reader, at, &present);
+    attrs->x0 = present ? gamewatch_item_record(reader, record) : NULL;
+    attrs->x4 = melee_host_hsd_reader_f32(reader, at + 0x4);
+    attrs->x8 = melee_host_hsd_reader_f32(reader, at + 0x8);
+    attrs->xC = melee_host_hsd_reader_f32(reader, at + 0xC);
+    for (i = 0; i < entries; i++) {
+        copy_words(reader, at + 0x10 + i * CHEF_ENTRY_SIZE, &attrs->entries[i],
+                   0, CHEF_ENTRY_SIZE);
+    }
+    return melee_host_hsd_reader_failed(reader) ? NULL : attrs;
+}
+
+/* Mr. Game & Watch's item list slot 10 is not an Article: ftGw_Init_OnLoad
+ * puts it in fp->x5AC.xC[4] as the visibility lookups of his 2D models, one
+ * {count, list} per model. */
+static void* gamewatch_vis_lookups(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    return fighter_vis_lookup(reader, at,
+                              melee_host_hsd_reader_extent(reader, at) / 8);
+}
+
 static void* fighter_data_gamewatch(MeleeHostHsdReader* reader, mh_u32 root)
 {
     static const FighterItemSpecial gamewatch_item_specials[] = {
-        item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs,
-        fighter_parts_vis_lookup_set
+        gamewatch_item_attrs, gamewatch_item_attrs, gamewatch_item_attrs,
+        gamewatch_item_attrs, gamewatch_item_attrs, gamewatch_item_attrs,
+        gamewatch_item_attrs, gamewatch_item_attrs, gamewatch_chef_attrs,
+        gamewatch_item_attrs,
+    };
+    static const mh_u8 gamewatch_custom_slots[] = { 10 };
+    static const FighterItemSpecial gamewatch_custom_translators[] = {
+        gamewatch_vis_lookups,
     };
     static const struct FighterItemAttrs gamewatch_items = {
         NULL, 0, NULL, 0, gamewatch_item_specials,
         sizeof(gamewatch_item_specials) / sizeof(gamewatch_item_specials[0]),
+        gamewatch_custom_slots, gamewatch_custom_translators,
+        sizeof(gamewatch_custom_slots) / sizeof(gamewatch_custom_slots[0]),
     };
     return fighter_data(reader, root, fighter_gamewatch_attrs, fighter_part_anim_set, &gamewatch_items);
 }
@@ -4050,8 +4522,19 @@ static void* fighter_data_ganon(MeleeHostHsdReader* reader, mh_u32 root)
 
 static void* fighter_data_kirby(MeleeHostHsdReader* reader, mh_u32 root)
 {
+    /* Slot 4 is the star a swallowed fighter rides in, a joint
+     * (ftKb_SpecialN_800F5898). */
+    static const mh_u8 kirby_direct_joint_slots[] = { 4 };
+    /* The Final Cutter's wave (slot 0) and slot 2 carry scalar blocks; the
+     * hammer and slot 3 have none. */
+    static const FighterItemSpecial kirby_item_specials[] = {
+        item_generic_scalar_attrs, NULL, item_generic_scalar_attrs, NULL,
+    };
     static const struct FighterItemAttrs kirby_items = {
-        NULL, 0, NULL, 0, NULL, 0,
+        NULL, 0, kirby_direct_joint_slots,
+        sizeof(kirby_direct_joint_slots) / sizeof(kirby_direct_joint_slots[0]),
+        kirby_item_specials,
+        sizeof(kirby_item_specials) / sizeof(kirby_item_specials[0]),
     };
     return fighter_data(reader, root, fighter_kirby_attrs, fighter_parts_vis_lookup_set, &kirby_items);
 }
@@ -4180,7 +4663,8 @@ static void* fighter_data_pikachu(MeleeHostHsdReader* reader, mh_u32 root)
 static void* fighter_data_popo(MeleeHostHsdReader* reader, mh_u32 root)
 {
     static const FighterItemSpecial popo_item_specials[] = {
-        item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs
+        item_generic_scalar_attrs, item_generic_scalar_attrs,
+        climbers_string_attrs
     };
     static const struct FighterItemAttrs popo_items = {
         NULL, 0, NULL, 0, popo_item_specials,
@@ -4189,10 +4673,51 @@ static void* fighter_data_popo(MeleeHostHsdReader* reader, mh_u32 root)
     return fighter_data(reader, root, fighter_popo_attrs, fighter_part_anim_set, &popo_items);
 }
 
+/* Jigglypuff's item slot 1 is not an Article: ftPr_Init_8013C360 reads a
+ * FtPartsDesc for her hats at its second pointer-sized element, which on the
+ * host is the desc of this struct. */
+typedef struct PurinHatParts {
+    u32 x0;
+    FtPartsDesc desc;
+} PurinHatParts;
+
+static void* purin_hat_parts(MeleeHostHsdReader* reader, mh_u32 at)
+{
+    PurinHatParts* const parts = melee_host_hsd_reader_allocate(
+        reader, sizeof(*parts), alignof(PurinHatParts));
+    bool present;
+    mh_u32 target;
+
+    if (parts == NULL) {
+        return NULL;
+    }
+    parts->x0 = melee_host_hsd_reader_u32(reader, at + 0x0);
+    parts->desc.model_num = melee_host_hsd_reader_u32(reader, at + 0x4);
+    if (parts->desc.model_num > 11) {
+        melee_host_hsd_reader_fail(reader, "Jigglypuff's hat parts have a "
+                                           "bad model count");
+        return NULL;
+    }
+    target = target_of(reader, at + 0x8, &present);
+    parts->desc.vis_table =
+        present ? fighter_vis_table(reader, target, parts->desc.model_num)
+                : NULL;
+    return melee_host_hsd_reader_failed(reader) ? NULL : parts;
+}
+
+_Static_assert(offsetof(PurinHatParts, desc) == sizeof(void*),
+               "ftPr_Init_8013C360 reads the desc at element 1");
+
 static void* fighter_data_purin(MeleeHostHsdReader* reader, mh_u32 root)
 {
+    static const mh_u8 purin_custom_slots[] = { 1 };
+    static const FighterItemSpecial purin_custom_translators[] = {
+        purin_hat_parts,
+    };
     static const struct FighterItemAttrs purin_items = {
         NULL, 0, NULL, 0, NULL, 0,
+        purin_custom_slots, purin_custom_translators,
+        sizeof(purin_custom_slots) / sizeof(purin_custom_slots[0]),
     };
     return fighter_data(reader, root, fighter_purin_attrs, fighter_part_anim_set, &purin_items);
 }
@@ -4272,8 +4797,12 @@ static void* fighter_data_seak(MeleeHostHsdReader* reader, mh_u32 root)
     static const FighterItemSpecial seak_item_specials[] = {
         item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs, seak_chain_attrs
     };
+    /* Slots 4 and 5 are the needles' models (ftSk_SpecialS). */
+    static const mh_u8 seak_direct_joint_slots[] = { 4, 5 };
     static const struct FighterItemAttrs seak_items = {
-        NULL, 0, NULL, 0, seak_item_specials,
+        NULL, 0, seak_direct_joint_slots,
+        sizeof(seak_direct_joint_slots) / sizeof(seak_direct_joint_slots[0]),
+        seak_item_specials,
         sizeof(seak_item_specials) / sizeof(seak_item_specials[0]),
     };
     return fighter_data(reader, root, fighter_seak_attrs, fighter_part_anim_set, &seak_items);
@@ -4284,8 +4813,13 @@ static void* fighter_data_yoshi(MeleeHostHsdReader* reader, mh_u32 root)
     static const FighterItemSpecial yoshi_item_specials[] = {
         item_generic_scalar_attrs, item_generic_scalar_attrs, item_generic_scalar_attrs
     };
+    /* Slot 3 is the egg a swallowed fighter is laid in, a joint
+     * (ftYs_SpecialN_8012CDD4). */
+    static const mh_u8 yoshi_direct_joint_slots[] = { 3 };
     static const struct FighterItemAttrs yoshi_items = {
-        NULL, 0, NULL, 0, yoshi_item_specials,
+        NULL, 0, yoshi_direct_joint_slots,
+        sizeof(yoshi_direct_joint_slots) / sizeof(yoshi_direct_joint_slots[0]),
+        yoshi_item_specials,
         sizeof(yoshi_item_specials) / sizeof(yoshi_item_specials[0]),
     };
     return fighter_data(reader, root, fighter_yoshi_attrs, fighter_parts_vis_lookup_set, &yoshi_items);
@@ -4370,9 +4904,9 @@ void melee_host_game_register_data_translators(void)
     (void) melee_host_hsd_register_translator("ftDataLink", fighter_data_link);
     (void) melee_host_hsd_register_translator("ftDataCaptain", fighter_data_captain);
     (void) melee_host_hsd_register_translator("ftDataDonkey", fighter_data_donkey);
-    (void) melee_host_hsd_register_translator("ftDataDrMario", fighter_data_drmario);
+    (void) melee_host_hsd_register_translator("ftDataDrmario", fighter_data_drmario);
     (void) melee_host_hsd_register_translator("ftDataFalco", fighter_data_falco);
-    (void) melee_host_hsd_register_translator("ftDataGameWatch", fighter_data_gamewatch);
+    (void) melee_host_hsd_register_translator("ftDataGamewatch", fighter_data_gamewatch);
     (void) melee_host_hsd_register_translator("ftDataGanon", fighter_data_ganon);
     (void) melee_host_hsd_register_translator("ftDataKirby", fighter_data_kirby);
     (void) melee_host_hsd_register_translator("ftDataKoopa", fighter_data_koopa);
@@ -4390,9 +4924,19 @@ void melee_host_game_register_data_translators(void)
     (void) melee_host_hsd_register_translator("ftDataSeak", fighter_data_seak);
     (void) melee_host_hsd_register_translator("ftDataYoshi", fighter_data_yoshi);
     (void) melee_host_hsd_register_translator("ftDataZelda", fighter_data_zelda);
-    (void) melee_host_hsd_register_translator("ftDataCLink", fighter_data_clink);
+    (void) melee_host_hsd_register_translator("ftDataClink", fighter_data_clink);
     (void) melee_host_hsd_register_translator("ftDataEmblem", fighter_data_emblem);
-    (void) melee_host_hsd_register_translator("ftDataGigaKoopa", fighter_data_gigakoopa);
+    (void) melee_host_hsd_register_translator("ftDataGkoopa", fighter_data_gigakoopa);
+    {
+        size_t i;
+        for (i = 0; i < sizeof(kirby_copy_schemas) /
+                            sizeof(kirby_copy_schemas[0]);
+             i++)
+        {
+            (void) melee_host_hsd_register_translator(
+                kirby_copy_schemas[i].symbol, kirby_copy_translators[i]);
+        }
+    }
     (void) melee_host_hsd_register_translator("lbBgFlashColAnimData",
                                               bg_flash_color_anims);
     (void) melee_host_hsd_register_translator("ftLoadCommonData",

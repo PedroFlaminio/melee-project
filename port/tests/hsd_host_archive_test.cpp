@@ -1151,6 +1151,70 @@ TEST_CASE("the common item data translates, leaving out per-kind layouts")
     REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
 }
 
+extern "C" int melee_host_test_check_kirby_copy_mario(void* translated,
+                                                      char* message,
+                                                      std::size_t size);
+extern "C" int melee_host_test_check_kirby_copy_donkey(void* translated,
+                                                       char* message,
+                                                       std::size_t size);
+
+TEST_CASE("a Kirby copy that starts with its hat translates field by field")
+{
+    // PlKbCpMr.dat's shape: the hat joint, a FtPartsDesc of one model whose
+    // visibility table has no lookups, and the fireball's Article, which
+    // carries only scalar attributes.
+    ArchiveBuilder builder(0x200);
+    builder.pointer(0x00, 0x40);   // hat joint (all zeroes)
+    builder.u32(0x04, 1);          // model_num
+    builder.pointer(0x08, 0x90);   // vis table
+    builder.pointer(0x0C, 0xB0);   // Article
+    builder.pointer(0xB4, 0xD0);   // its special attributes
+    builder.f32(0xD0, 2.5F);
+    builder.f32(0xE0, 0.75F);
+    builder.public_symbol(0x00, "ftDataKirbyCopyMario");
+    std::vector<std::byte> bytes = builder.build();
+
+    melee_host_game_register_data_translators();
+    HSD_Archive archive{};
+    REQUIRE(HSD_ArchiveParse(&archive, bytes_of(bytes), bytes.size()) == 0);
+    void* const copy =
+        HSD_ArchiveGetPublicAddress(&archive, "ftDataKirbyCopyMario");
+    REQUIRE(copy != nullptr);
+    char message[256] = {};
+    REQUIRE(melee_host_test_check_kirby_copy_mario(copy, message,
+                                                    sizeof(message)) == 1);
+    REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
+}
+
+TEST_CASE("a Kirby copy that starts with ftData_x8 lands on LOAD_HAT's fields")
+{
+    // PlKbCpDk.dat's shape: model_num, visibility table, texture count and
+    // rows, then a part mask that is a plain word and the hat's root joint.
+    ArchiveBuilder builder(0x200);
+    builder.u32(0x00, 1);
+    builder.pointer(0x04, 0x40);   // vis table
+    builder.u32(0x08, 2);          // texture count
+    builder.pointer(0x0C, 0x60);   // rows
+    builder.u32(0x10, 0x1800);     // part mask
+    builder.pointer(0x14, 0x80);   // root joint (all zeroes)
+    builder.pointer(0x60, 0x70);   // row 0
+    builder.u16(0x70, 7);
+    builder.u16(0x72, 9);
+    builder.public_symbol(0x00, "ftDataKirbyCopyDonkey");
+    std::vector<std::byte> bytes = builder.build();
+
+    melee_host_game_register_data_translators();
+    HSD_Archive archive{};
+    REQUIRE(HSD_ArchiveParse(&archive, bytes_of(bytes), bytes.size()) == 0);
+    void* const copy =
+        HSD_ArchiveGetPublicAddress(&archive, "ftDataKirbyCopyDonkey");
+    REQUIRE(copy != nullptr);
+    char message[256] = {};
+    REQUIRE(melee_host_test_check_kirby_copy_donkey(copy, message,
+                                                     sizeof(message)) == 1);
+    REQUIRE(melee_host_hsd_archive_release(bytes.data()) == MELEE_HOST_OK);
+}
+
 extern "C" int melee_host_test_check_stage_coll_data(void* translated,
                                                     char* message,
                                                     std::size_t size);

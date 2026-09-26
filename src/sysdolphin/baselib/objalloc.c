@@ -18,6 +18,62 @@ typedef u32 ObjHeapSize;
 
 static objheap obj_heap = { 0, 0, -1, -1 };
 
+#if defined(MELEE_HOST) && defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define MELEE_HOST_OBJALLOC_CAN_MALLOC 1
+#endif
+#endif
+#if defined(MELEE_HOST) && defined(__SANITIZE_ADDRESS__)
+#define MELEE_HOST_OBJALLOC_CAN_MALLOC 1
+#endif
+
+#ifdef MELEE_HOST_OBJALLOC_CAN_MALLOC
+#include <sanitizer/asan_interface.h>
+#include <stdlib.h>
+/* MELEE_HOST_OBJALLOC_POISON=1 keeps the pools but marks a free object's
+ * bytes unaddressable, so a write through a stale pointer is reported where
+ * it happens, not as a corrupt free list later. */
+static bool objalloc_poison(void)
+{
+    static int mode = -1;
+    if (mode < 0) {
+        const char* value = getenv("MELEE_HOST_OBJALLOC_POISON");
+        mode = value != NULL && value[0] == '1';
+    }
+    return mode != 0;
+}
+#define OBJ_POISON(data, obj)                                                 \
+    do {                                                                      \
+        if (objalloc_poison()) {                                              \
+            ASAN_POISON_MEMORY_REGION((obj), (data)->size);                   \
+        }                                                                     \
+    } while (0)
+#define OBJ_UNPOISON(data, obj)                                               \
+    do {                                                                      \
+        if (objalloc_poison()) {                                              \
+            ASAN_UNPOISON_MEMORY_REGION((obj), (data)->size);                 \
+        }                                                                     \
+    } while (0)
+#else
+#define OBJ_POISON(data, obj) ((void) 0)
+#define OBJ_UNPOISON(data, obj) ((void) 0)
+#endif
+#ifdef MELEE_HOST_OBJALLOC_CAN_MALLOC
+/* MELEE_HOST_OBJALLOC_MALLOC=1, in a sanitized build, gives every object
+ * its own malloc block instead of a slot in a pool, so AddressSanitizer
+ * sees a write past an object or into one already freed, which inside a
+ * pool only shows up later as a corrupt free list. */
+static bool objalloc_malloc(void)
+{
+    static int mode = -1;
+    if (mode < 0) {
+        const char* value = getenv("MELEE_HOST_OBJALLOC_MALLOC");
+        mode = value != NULL && value[0] == '1';
+    }
+    return mode != 0;
+}
+#endif
+
 static HSD_ObjAllocData* alloc_datas;
 
 void HSD_ObjSetHeap(u32 size, void* ptr)
@@ -71,6 +127,9 @@ s32 HSD_ObjAllocAddFree(HSD_ObjAllocData* data, u32 num)
                 (void*) (pool_start + data->size * (i + 1));
         }
         *(void**) (pool_start + data->size * i) = data->freehead;
+        for (i = 0; (unsigned) i < num; i++) {
+            OBJ_POISON(data, pool_start + data->size * i);
+        }
     }
 
     data->freehead = (HSD_ObjAllocLink*) pool_start;
@@ -118,6 +177,15 @@ void* HSD_ObjAlloc(HSD_ObjAllocData* data)
             return NULL;
         }
     }
+#ifdef MELEE_HOST_OBJALLOC_CAN_MALLOC
+    if (objalloc_malloc()) {
+        data->used += 1;
+        if (data->used > data->peak) {
+            data->peak = data->used;
+        }
+        return malloc(data->size);
+    }
+#endif
     if (data->free == 0) {
         HSD_ObjAllocAddFree(data, 1);
         if (data->free == 0) {
@@ -125,6 +193,7 @@ void* HSD_ObjAlloc(HSD_ObjAllocData* data)
         }
     }
     cur = data->freehead;
+    OBJ_UNPOISON(data, cur);
     data->freehead = cur->next;
     data->used += 1;
     data->free -= 1;
@@ -137,8 +206,16 @@ void* HSD_ObjAlloc(HSD_ObjAllocData* data)
 void HSD_ObjFree(HSD_ObjAllocData* data, void* obj)
 {
     HSD_ObjAllocLink* link = obj;
+#ifdef MELEE_HOST_OBJALLOC_CAN_MALLOC
+    if (objalloc_malloc()) {
+        free(obj);
+        data->used -= 1;
+        return;
+    }
+#endif
     link->next = data->freehead;
     data->freehead = link;
+    OBJ_POISON(data, link);
     data->free += 1;
     data->used -= 1;
 }

@@ -117,6 +117,13 @@ bool melee_host_match_force_stage(mh_u32 stkind)
     return melee_host_sss_force_stage((int) stkind);
 }
 
+bool melee_host_match_force_character(mh_u32 port, mh_u32 ckind,
+                                      mh_u32 cpu_level)
+{
+    return melee_host_sss_force_character((int) port, (int) ckind,
+                                          (int) cpu_level);
+}
+
 bool melee_host_match_clock(mh_u32* seconds, mh_u32* frames)
 {
     VsSceneController* scene = gmVs_GetSceneController();

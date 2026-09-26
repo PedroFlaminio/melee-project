@@ -22,6 +22,7 @@ import argparse
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -30,7 +31,11 @@ STAGE_STATUS = REPO / "port/data/stage_status.json"
 
 with STAGE_STATUS.open(encoding="utf-8") as stage_status_file:
     _stage_status = json.load(stage_status_file)["stages"]
-STAGE_KINDS = [stage["kind"] for stage in _stage_status]
+# The random square is not a stage: the select screen draws one of the others
+# (mnStageSel_802599EC) before the match, and its kind, 0, is the Dummy stage,
+# which has no music and asserts if forced.  It is swept only when named.
+STAGE_KINDS = [stage["kind"] for stage in _stage_status
+               if not stage.get("random", False)]
 STAGE_NAMES = {stage["kind"]: stage["name"] for stage in _stage_status}
 
 # The menu route to the stage select, with two ports taking Fox.  The stage
@@ -54,9 +59,23 @@ def run_stage(binary: pathlib.Path, root: str, kind: int, frames: int,
     """Play one stage and classify how it went."""
     route = [*ROUTE_TO_STAGE_SELECT, f"{FORCE_FRAME}:STAGE={kind}",
              f"{FORCE_FRAME + frames}:STOP"]
+    report = {"stage": kind, "name": STAGE_NAMES.get(kind, "?")}
+    report.update(run_route(binary, root, route, timeout, log_lines,
+                            no_audio))
+    return report
+
+
+def run_route(binary: pathlib.Path, root: str, route: list[str],
+              timeout: int, log_lines: int = 25,
+              no_audio: bool = False) -> dict:
+    """Run one --run-modes route and classify how it went."""
     argv = [str(binary), "--run-modes", root, "0", "3", *route]
-    report = {"stage": kind, "name": STAGE_NAMES.get(kind, "?"),
-              "route": " ".join(route)}
+    # Line-buffer the game's stdout: a pipe is block-buffered, and a run that
+    # dies by a signal would lose the scene lines that say where it was.
+    stdbuf = shutil.which("stdbuf")
+    if stdbuf is not None:
+        argv = [stdbuf, "-oL", *argv]
+    report = {"route": " ".join(route)}
     try:
         done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True,
                               timeout=timeout,

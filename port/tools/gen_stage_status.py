@@ -30,6 +30,8 @@ def generate() -> str:
                 not isinstance(enabled, bool) or kind in kinds):
             raise ValueError(f"invalid or duplicate stage entry: {stage!r}")
         kinds.add(kind)
+        if stage.get("random", False) and enabled:
+            raise ValueError("the random square is not a stage to enable")
         if enabled:
             playable.append((kind, name))
     playable.sort()

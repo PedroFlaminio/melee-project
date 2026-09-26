@@ -186,8 +186,10 @@ void ft_80089B08(Fighter_GObj* gobj)
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
-                ((volatile f32*) &sp1C)[-1] = (f32) ((f64) line_len * guess);
-                line_len = ((volatile f32*) &sp1C)[-1];
+                /* This used to write the word before sp1C, where MWCC
+                 * puts line_len_sqrt; on the host that is outside sp1C. */
+                line_len_sqrt = (f32) ((f64) line_len * guess);
+                line_len = line_len_sqrt;
             }
             if (line_len < 5.0f) {
                 adj_angle = 0.0f;

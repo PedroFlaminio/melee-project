@@ -207,5 +207,6 @@ HSD_Joint* ftKb_SpecialN_800F5898(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftData* ca = fp->ft_data;
-    return M2C_FIELD(&ca->x48_items[0], HSD_Joint**, 0x10);
+    /* Item slot 4; this used to read it at byte 0x10 of the list. */
+    return (HSD_Joint*) ca->x48_items[4];
 }

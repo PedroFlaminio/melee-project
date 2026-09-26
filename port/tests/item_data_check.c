@@ -3,6 +3,7 @@
  * C++ cannot include the item headers to read. */
 
 #include <melee/it/itCommonItems.h>
+#include <melee/ft/types.h>
 #include <melee_host/boot.h>
 
 #include <melee/it/forward.h>
@@ -15,6 +16,10 @@
 
 int melee_host_test_check_item_public_data(void* translated, char* message,
                                            size_t size);
+int melee_host_test_check_kirby_copy_mario(void* translated, char* message,
+                                           size_t size);
+int melee_host_test_check_kirby_copy_donkey(void* translated, char* message,
+                                            size_t size);
 
 #define CHECK(condition)                                                      \
     do {                                                                      \
@@ -139,5 +144,48 @@ int melee_host_test_check_item_public_data(void* translated, char* message,
     CHECK(data->x14[1].unk == states[0].xC_script);
     CHECK(data->x14[1].unk4 == 30);
     CHECK(data->x14[1].unk5 == 2);
+    return 1;
+}
+
+/* A copy that starts with the hat: its joint, FtPartsDesc and the Article of
+ * the item Kirby throws, with scalar attributes. */
+int melee_host_test_check_kirby_copy_mario(void* translated, char* message,
+                                           size_t size)
+{
+    const KirbyHatStruct* const hat = translated;
+    const Article* article;
+    const f32* attrs;
+
+    CHECK(hat != NULL);
+    CHECK(hat->hat_joint != NULL);
+    CHECK(hat->desc.model_num == 1);
+    CHECK(hat->desc.vis_table != NULL);
+    article = (const Article*) hat->hat_dynamics[0];
+    CHECK(article != NULL);
+    attrs = article->x4_specialAttributes;
+    CHECK(attrs != NULL &&
+          (const void*) attrs != (const void*) &melee_host_item_data_left_out);
+    CHECK(attrs[0] == 2.5f && attrs[4] == 0.75f);
+    CHECK(hat->hat_dynamics[1] == NULL);
+    return 1;
+}
+
+/* A copy that starts with a whole ftData_x8: read as FtPartsDesc at the hat
+ * and as ftData_x8_x8 at &hat->desc.vis_table, as LOAD_HAT reads it, then a
+ * part mask kept in a pointer and the hat's root joint. */
+int melee_host_test_check_kirby_copy_donkey(void* translated, char* message,
+                                            size_t size)
+{
+    const KirbyHatStruct* const hat = translated;
+    const FtPartsDesc* const parts = (const FtPartsDesc*) hat;
+    const ftData_x8_x8* const rows =
+        (const ftData_x8_x8*) &hat->desc.vis_table;
+
+    CHECK(hat != NULL);
+    CHECK(parts->model_num == 1 && parts->vis_table != NULL);
+    CHECK(rows->x8 == 2 && rows->xC != NULL && rows->xC[0] != NULL);
+    CHECK(rows->xC[0][0] == 7 && rows->xC[0][1] == 9);
+    CHECK((u32) (uintptr_t) hat->hat_dynamics[1] == 0x1800);
+    CHECK(hat->hat_dynamics[2] != NULL);
     return 1;
 }

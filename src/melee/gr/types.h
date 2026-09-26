@@ -970,7 +970,12 @@ struct grYorster_GroundVars {
 
 struct grZebes_GroundVars {
     /*  +0 gp+C4:0 */ u8 x0_b0 : 1;
-    /*  +4 gp+C8 */ u32 x4;
+    /*  +4 gp+C8 */ union {
+        /* A flag on grZebes_801D9758's gobj, a JObj on
+         * grZebes_801D9508's, which a u32 truncated. */
+        u32 x4;
+        HSD_JObj* x4_jobj;
+    };
     /*  +8 gp+CC */ s16 x8;
     /*  +A gp+CE */ s16 xA;
     /*  +C gp+D0 */ Vec3 xC;
@@ -1021,7 +1026,9 @@ struct grZebes_GroundVars5 {
     /* +0C gp+D0 */ f32 xD0;
     /* +10 gp+D4 */ f32 xD4;
     /* +14 gp+D8 */ f32 xD8;
-    /* +18 gp+DC */ u32 xDC;
+    /* The LObj grZebes_801DA254 caches, which it used to reach through
+     * grZebes_GroundVars4, a view that puts gp+DC elsewhere on the host. */
+    /* +18 gp+DC */ MELEE_HOST_PTR(HSD_LObj*, u32) xDC;
     /* +1C gp+E0 */ u32 xE0;
     /* +20 gp+E4 */ u32 xE4;
     /* +24 gp+E8 */ s16 xE8;
@@ -1552,13 +1559,19 @@ struct grCastle_GroundVars {
     /*  +0 gp+E0 */ HSD_Spline** xE0;
 };
 
+/* The castle's main gobj is read through grCastle_GroundVars2, 3, 4, 9 and 12.
+ * Their leading bytes are its three satellite GObjs (gp+C4..CC) and two s16
+ * (gp+D0, D2); each view spells them out so that the fields after them land
+ * at the same host offsets in all five, as they do on the console. */
 struct grCastle_GroundVars3 {
-    /* +00 gp+C4 */ u8 pad_0[0x1C];
+    /* +00 gp+C4 */ HSD_GObj* pad_sats[3];
+    /* +0C gp+D0 */ u8 pad_0[0x10];
     /* +1C gp+E0 */ DynamicsDesc x1C[12];
 };
 
 struct grCastle_GroundVars4 {
-    /* +00 gp+C4 */ u8 pad_0[0x12];
+    /* +00 gp+C4 */ HSD_GObj* pad_sats[3];
+    /* +0C gp+D0 */ u8 pad_0[0x6];
     /* +12 gp+D6 */ s16 xD6;
     /* +14 gp+D8 */ s16 xD8;
     /* +16 gp+DA */ s16 xDA;
@@ -1609,9 +1622,9 @@ struct grCastle_GroundVars8 {
 };
 
 struct grCastle_GroundVars9 {
-    /* +00   gp+C4 */ u32 xC4;
-    /* +04   gp+C8 */ u32 xC8;
-    /* +08   gp+CC */ u32 xCC;
+    /* +00   gp+C4 */ HSD_GObj* xC4;
+    /* +04   gp+C8 */ HSD_GObj* xC8;
+    /* +08   gp+CC */ HSD_GObj* xCC;
     /* +0C   gp+D0 */ u8 pad_xD0[4];
     /* +10   gp+D4 */ s16 xD4;
     /* +12   gp+D6 */ s16 xD6;
@@ -1650,17 +1663,42 @@ struct grCastle_GroundVars11 {
         u8 b6 : 1;
         u8 b7 : 1;
     } xC4;
-    /* +01 gp+C5 */ u8 pad_01[3];
+    /* +01 gp+C5 */ u8 pad_01;
+    /* +02 gp+C6 */ s16 kind;
     /* +04 gp+C8 */ s16 xC8;
     /* +06 gp+CA */ s16 xCA;
-    /* +08 gp+CC */ u32 xCC;
-    /* +0C gp+D0 */ u32 xD0;
-    /* +10 gp+D4 */ u32 xD4;
-    /* +14 gp+D8 */ u32 xD8;
+    /* These four were u32, which truncates the addresses they hold. */
+    /* +08 gp+CC */ HSD_GObj* xCC;
+    /* +0C gp+D0 */ HSD_GObj* xD0;
+    /* +10 gp+D4 */ HSD_GObj* xD4;
+    /* +14 gp+D8 */ void* xD8;
+};
+
+/// The gobj grCastle_801CE8E8 creates: an item and a camera subject, which
+/// it used to keep in grArwing_GroundVars's u32 fields.
+struct grCastle_CameraVars {
+    /* gp+C4 */ HSD_GObj* item;
+    /* gp+C8 */ void* subject;
+};
+
+/// A satellite (Onett's, Big Blue's or Mute City's piece of stage) flying
+/// through the castle.  Its code used to read it through six other views,
+/// which only agree while a pointer is four bytes.
+struct grCastle_SatelliteVars {
+    /* gp+C4 */ s16 state;
+    /* gp+C6 */ u8 pad_C6[2];
+    /* gp+C8 */ s16 blink_idx;
+    /* gp+CA */ s16 blink_delay;
+    /* gp+CC */ s16 fall_timer;
+    /* gp+CE */ u8 pad_CE[2];
+    /* gp+D0 */ HSD_GObj* partner;
+    /* gp+D4 */ HSD_JObj* anchor;
+    /* gp+D8 */ HSD_GObj* item;
 };
 
 struct grCastle_GroundVars12 {
-    /* +00 gp+C4 */ u32 xC4[3];
+    /* The same three satellites grCastle_GroundVars2 names one by one. */
+    /* +00 gp+C4 */ HSD_GObj* xC4[3];
     /* +0C gp+D0 */ s16 xD0;
     /* +0E gp+D2 */ s16 xD2;
 };
@@ -1918,6 +1956,8 @@ struct Ground {
         struct grCastle_GroundVars10 castle10;
         struct grCastle_GroundVars11 castle11;
         struct grCastle_GroundVars12 castle12;
+        struct grCastle_SatelliteVars castle_sat;
+        struct grCastle_CameraVars castle_cam;
         struct grCorneria_GroundVars corneria;
         struct grCorneria_GroundVars2 corneria2;
         struct grGreatBay_GroundVars greatbay;

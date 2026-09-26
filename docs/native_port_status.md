@@ -596,7 +596,7 @@ Each translator below unblocked the next step of match entry, in this order:
 - The title's texture cache and the presenter recognize an image by the address of its data and
   its palette. An EFB copy that rewrites the address is re-decoded by the copy's generation, but
   an animation that rewrites an image by some other means keeps showing the first one.
-- **17 of the 30 stages the select screen offers enter a match on every run**, measured 22 September 2026
+- **All 29 stages enter a match on every run** (the thirtieth square is the random one), measured 25 September 2026
   with `port/tools/sweep_stages.py`; the canonical list is
   [`port/data/stage_status.json`](../port/data/stage_status.json), which generates the native
   allowlist and supplies the sweep's stage order and names. `yakumono_param` has a per-stage
@@ -607,11 +607,24 @@ Each translator below unblocked the next step of match entry, in this order:
   `melee_host_stage_symbols_check` still raises an `OSPanic` as the backstop, because nothing
   in the engine can unwind a half-built stage. `ground.c`'s `stage_datas` links every stage,
   and the file API translates `grGroundParam`, `coll_data`, `map_head` (69 of 71), `map_plit`,
-  `quake_model_set`, `itemdata` and `ALDYakuAll`. The other 47 have parameters of their own, with the
-  layout of the struct each `grXXX.c` declares (floats, ints, pairs of u16 in one word and
-  pointers), and stop by name: without the field widths, a block of bytes from the disc does not
-  become host values. Stage items created from `itemdata` stop by name where the item needs its
-  per-type attributes.
+  `quake_model_set`, `itemdata` and `ALDYakuAll`. Stage items get their per-type attributes
+  from a table by item kind (Shy Guy, Tingle; Food and the Bob-omb among the common items); any
+  other kind still stops by name in `Item_80267978`. The stage
+  code that reached ten stages on 25 September — raw console offsets over `Ground`, one gobj
+  read through two views that diverge on the host, `.data` read as one word array across
+  globals — is catalogued in [`project-progress.md`](project-progress.md) under *Known
+  issues*; expect the same shapes in the modes' stages (targets, Home-Run, Adventure routes),
+  none of which has been run.
+- **All 26 characters play**, measured 26 September 2026 with `port/tools/sweep_characters.py
+  --repeat 3`: each as a level 9 CPU against Mario, and each as the fighter a CPU Kirby
+  swallows, for 1800 frames on Battlefield. The canonical list is
+  [`port/data/character_status.json`](../port/data/character_status.json).
+  `FRAME:CHAR=KIND,PORT[,CPU_LEVEL]` sets a port's character on the stage select
+  (`melee_host_sss_force_character`), reaching all 26 without a save. Kirby's copy abilities
+  (`ftDataKirbyCopy*`) are translated by `kirby_copy_schemas`, one field type per reader in
+  ftkirby.c. In sanitized builds `MELEE_HOST_OBJALLOC_MALLOC=1` and `MELEE_HOST_OBJALLOC_POISON=1`
+  make the HSD object pools visible to AddressSanitizer. Not swept: character × stage, items,
+  more than two players.
 - `lbFile_800164A4` chooses a direct read into RAM because the destination is above
   `0x80000000`, which the host's 64-bit addresses satisfy; `lbmemory.c`'s split between ARAM and
   RAM uses 16 MB on the host.

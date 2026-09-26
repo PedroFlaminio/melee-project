@@ -757,6 +757,15 @@ extern "C" void* melee_host_hsd_reader_mobj(MeleeHostHsdReader* reader,
         });
 }
 
+extern "C" void* melee_host_hsd_reader_figa_tree(MeleeHostHsdReader* reader,
+                                                 mh_u32 offset)
+{
+    return reader_step<void*>(
+        reader, nullptr, [offset](HsdMaterializedArchive& d) -> void* {
+            return d.translator_figa_tree(offset);
+        });
+}
+
 extern "C" void* melee_host_hsd_reader_spline(MeleeHostHsdReader* reader,
                                               mh_u32 offset)
 {

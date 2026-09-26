@@ -2291,7 +2291,8 @@ int main(int argc, char** argv)
              * and come back up; with LAST it is held through that frame.  An
              * input is a button name, SX=N or SY=N for the main stick, or
              * the headless diagnostics SHADOW, EFBCOPY, FIGHTERS, MOVE, ACTION,
-             * FALLS, RULES, RESULT, STAGE=KIND, CLOCK[=SECONDS], MATCHES[=TOTAL],
+             * FALLS, RULES, RESULT, STAGE=KIND, CHAR=KIND,PORT[,CPU_LEVEL],
+             * CLOCK[=SECONDS], MATCHES[=TOTAL],
              * TROPHY=ID, STOP and TRACE=PATH. PORT is 1 to 4,
              * 1 when omitted; a port the script names is
              * connected from the start.  Frames count across modes. */
@@ -2349,6 +2350,7 @@ int main(int argc, char** argv)
                 std::vector<mh_u32> clock_traces;
                 std::vector<std::array<mh_u32, 2>> clock_sets;
                 std::vector<std::array<mh_u32, 2>> stage_sets;
+                std::vector<std::array<mh_u32, 4>> char_sets;
                 std::vector<mh_u32> matches_traces;
                 std::vector<std::array<mh_u32, 2>> matches_sets;
                 std::vector<mh_u32> stop_frames;
@@ -2530,6 +2532,44 @@ int main(int argc, char** argv)
                     } else {
                         input.matches_traces.push_back(frame);
                     }
+                    continue;
+                }
+                if (inputs.rfind("CHAR=", 0) == 0) {
+                    /* KIND,PORT[,CPU_LEVEL]; PORT is 1 to 4 like @PORT. */
+                    std::array<mh_u32, 4> set{};
+                    std::string rest = inputs.substr(5);
+                    std::vector<mh_u32> values;
+                    size_t start = 0;
+                    while (start <= rest.size()) {
+                        const size_t comma = rest.find(',', start);
+                        const std::string part = rest.substr(
+                            start, comma == std::string::npos
+                                       ? std::string::npos
+                                       : comma - start);
+                        if (part.empty()) {
+                            break;
+                        }
+                        values.push_back(
+                            static_cast<mh_u32>(std::stoul(part)));
+                        if (comma == std::string::npos) {
+                            break;
+                        }
+                        start = comma + 1;
+                    }
+                    if (frames.find('-') != std::string::npos ||
+                        values.size() < 2 || values.size() > 3 ||
+                        values[1] < 1 || values[1] > 4)
+                    {
+                        std::cerr << "expected FRAME:CHAR=KIND,PORT"
+                                     "[,CPU_LEVEL], got "
+                                  << entry << '\n';
+                        return 2;
+                    }
+                    set[0] = static_cast<mh_u32>(std::stoul(frames));
+                    set[1] = values[0];
+                    set[2] = values[1] - 1;
+                    set[3] = values.size() > 2 ? values[2] : 0;
+                    input.char_sets.push_back(set);
                     continue;
                 }
                 if (inputs.rfind("STAGE=", 0) == 0) {
@@ -3057,6 +3097,24 @@ int main(int argc, char** argv)
                  * cursor only ever reaches the squares a save unlocks, and
                  * steering it needs the icon layout; force_stage_id is the
                  * route the game's own modes take. */
+                /* A port's character, set where the character select
+                 * left it, for the same reason: the cursor reaches only
+                 * what a save unlocks. */
+                for (const auto& entry : state->char_sets) {
+                    if (entry[0] != state->frames) {
+                        continue;
+                    }
+                    if (melee_host_match_force_character(entry[2], entry[1],
+                                                         entry[3]))
+                    {
+                        std::cout << "char frame " << entry[0] << ": port "
+                                  << entry[2] + 1 << " takes " << entry[1]
+                                  << '\n';
+                    } else {
+                        std::cout << "char frame " << entry[0]
+                                  << ": not on the stage select\n";
+                    }
+                }
                 for (const auto& entry : state->stage_sets) {
                     if (entry[0] != state->frames) {
                         continue;

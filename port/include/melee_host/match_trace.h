@@ -49,6 +49,8 @@ bool melee_host_match_award_trophy(mh_u32 trophy);
  * select screen, which is how the stage dimension gets swept for crashes.
  * False unless the stage select is the running scene. */
 bool melee_host_match_force_stage(mh_u32 stkind);
+bool melee_host_match_force_character(mh_u32 port, mh_u32 ckind,
+                                      mh_u32 cpu_level);
 
 /* The clock the running VS scene counts, in whole seconds left and frames
  * inside the current second (0 to 59).  False when the scene has no timer. */

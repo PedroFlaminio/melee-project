@@ -2680,12 +2680,17 @@ void ftKb_Init_LoadSpecialAttrs(HSD_GObj* gobj)
 
 void ftKb_Init_800EEB00(Fighter_GObj* gobj, ArticleDynamicBones** arg1)
 {
-    *arg1 = ft_80459B88.hats[Ft_Kind_Pichu]->hat_dynamics[4]->ftDynamicBones;
+    *arg1 = (ArticleDynamicBones*) (uintptr_t) ((ftKb_GameWatchHatWords*) ft_80459B88
+                                                    .hats[Ft_Kind_Pichu]
+                                                    ->hat_dynamics[4])
+                ->x4;
 }
 
 void ftKb_Init_800EEB1C(Fighter_GObj* gobj, s32* arg1)
 {
-    *arg1 = ft_80459B88.hats[Ft_Kind_Pichu]->hat_dynamics[4]->x4;
+    *arg1 = (s32) ((ftKb_GameWatchHatWords*) ft_80459B88.hats[Ft_Kind_Pichu]
+                       ->hat_dynamics[4])
+                ->x8;
 }
 
 void ftKb_Init_OnKnockbackEnter(HSD_GObj* gobj)
@@ -2967,7 +2972,8 @@ void ftKb_SpecialN_800EF0E4(Fighter_GObj* gobj, int arg1, u8* arg2)
                     HSD_ASSERT(0x43E, 0);
                 }
                 dst = fp->u.kb.hat.x14.data;
-                *(HSD_DObj**) ((u8*) dst + dst_off) = dobj;
+                /* dst_off counts four bytes per DObj pointer, the console's. */
+                dst[dst_off / 4] = dobj;
                 mobj = dobj->mobj;
                 if (mobj != NULL) {
                     hsdChangeClass(mobj, &ftMObj);
@@ -3075,7 +3081,8 @@ void ftKb_SpecialN_800EF438(Fighter_GObj* gobj, KirbyHatStruct* hat)
                         HSD_ASSERT(0x4B9, 0);
                     }
                     dst = fp->u.kb.hat.x1C.data;
-                    *(HSD_DObj**) ((u8*) dst + dst_off) = dobj;
+                    /* dst_off counts four bytes per DObj pointer, the console's. */
+                    dst[dst_off / 4] = dobj;
                     mobj = dobj->mobj;
                     if (mobj != NULL) {
                         hsdChangeClass(mobj, &ftMObj);
@@ -3130,9 +3137,10 @@ void ftKb_SpecialN_800EF69C(Fighter_GObj* gobj, int arg1, KirbyHatStruct* hat)
             jobj = bone->joint;
             dobj = (HSD_DObj*) jobj;
             if (jobj != NULL && (bone->flags_b6 || bone->flags2_b7)) {
-                u8* b9p = &((u8*) bone)[9];
-                if ((*b9p >> 1) & 1) {
-                    if ((*b9p >> 2) & 1) {
+                /* These read byte 9 of the bone, its flags2 byte on the
+                 * console; MWCC packs flags2_b0 into the top bit. */
+                if (bone->flags2_b6) {
+                    if (bone->flags2_b5) {
                         dobj = fp->x203C.data[bone->xD];
                     } else {
                         dobj = fp->dobj_list.data[bone->xD];
@@ -3752,8 +3760,10 @@ void ftKb_SpecialN_800F14B4(Fighter_GObj* gobj)
     fp->u.kb.hat.x24.xC[4] = lookup;
     fp->x5AC.xC[4] = lookup;
     ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);
-    ftKb_SpecialN_800F1420(gobj, (u32*) ((u8*) hat->hat_dynamics[4] + 4));
-    *(u32*) &fp->x610_color_rgba[1] = *(u32*) ((u8*) hat->hat_dynamics[4] + 8);
+    ftKb_SpecialN_800F1420(
+        gobj, &((ftKb_GameWatchHatWords*) hat->hat_dynamics[4])->x4);
+    *(u32*) &fp->x610_color_rgba[1] =
+        ((ftKb_GameWatchHatWords*) hat->hat_dynamics[4])->x8;
     Fighter_UpdateModelScale(gobj);
 }
 #ifdef MUST_MATCH

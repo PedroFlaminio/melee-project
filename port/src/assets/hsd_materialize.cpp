@@ -1835,6 +1835,11 @@ HSD_Spline* HsdMaterializedArchive::translator_spline(std::uint32_t data_offset)
     return spline_desc({ data_offset });
 }
 
+FigaTree* HsdMaterializedArchive::translator_figa_tree(std::uint32_t data_offset)
+{
+    return figa_tree_at({ data_offset });
+}
+
 void HsdMaterializedArchive::index_stream_boundaries()
 {
     if (streams_indexed_) {

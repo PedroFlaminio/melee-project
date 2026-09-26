@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "measured_on": "2026-09-26",
+  "note": "vs_cpu: the character as a level 9 CPU against Mario on Battlefield; kirby_copy: Kirby against the character, which loads ftDataKirbyCopy<X>. null means not measured yet. Written by port/tools/sweep_characters.py --update.",
+  "characters": [
+    { "kind": 0, "name": "Captain Falcon", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 1, "name": "Donkey Kong", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 2, "name": "Fox", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 3, "name": "Mr. Game & Watch", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 4, "name": "Kirby", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 5, "name": "Bowser", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 6, "name": "Link", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 7, "name": "Luigi", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 8, "name": "Mario", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 9, "name": "Marth", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 10, "name": "Mewtwo", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 11, "name": "Ness", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 12, "name": "Peach", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 13, "name": "Pikachu", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 14, "name": "Ice Climbers", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 15, "name": "Jigglypuff", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 16, "name": "Samus", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 17, "name": "Yoshi", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 18, "name": "Zelda", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 19, "name": "Sheik", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 20, "name": "Falco", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 21, "name": "Young Link", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 22, "name": "Dr. Mario", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 23, "name": "Roy", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 24, "name": "Pichu", "vs_cpu": true, "kirby_copy": true },
+    { "kind": 25, "name": "Ganondorf", "vs_cpu": true, "kirby_copy": true }
+  ]
+}

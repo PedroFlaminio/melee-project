@@ -2075,6 +2075,15 @@ typedef struct Kirby_Unk {
     /* +1C */ ftDynamics* x1C;
 } Kirby_Unk;
 
+/// The Game & Watch copy's fifth hat field: three words, not an ftDynamics.
+/// Its readers used to reach them at +4 and +8 of an ftDynamics, which only
+/// lines up while a pointer is four bytes.
+typedef struct ftKb_GameWatchHatWords {
+    /* +0 */ f32 x0;
+    /* +4 */ u32 x4;
+    /* +8 */ u32 x8;
+} ftKb_GameWatchHatWords;
+
 struct ft_80459B88_t {
     /* +0 */ Kirby_Unk* x0;
     /* +4 */ KirbyHatStruct* hats[Ft_Kind_Max];

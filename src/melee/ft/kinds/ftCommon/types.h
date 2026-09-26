@@ -164,10 +164,14 @@ union ftCommon_MotionVars {
         /* fp+2340 */ bool x0; // itemget action is heavy type?
     } itemget;
     struct {
-        /* fp+2340 */ UNK_T x0;
+        /* A word nothing reads; as a pointer it pushed x4 and x8 onto
+         * throw_.xC on the host. */
+        /* fp+2340 */ s32 x0;
         /* fp+2344 */ int x4;
         /* fp+2348 */ int x8;
         /* fp+234C */ HSD_GObj* victim;
+        /* The throws read their jump through throw_.xC.y and .z, the same
+         * words on the console. */
         /* fp+2350 */ float self_vel_y;
         /* fp+2354 */ float self_vel_x;
     } fighterthrow;
@@ -439,6 +443,10 @@ union ftCommon_MotionVars {
         /* fp+2348 */ int x8;
         /* fp+234C */ u8 xC;
     } capturewait;
+    struct {
+        /* fp+2340 */ float timer;
+        /* fp+2344 */ s32 released;
+    } itemscope;
 };
 
 /// @todo Fake, need to find real size of #HitCapsule

@@ -145,21 +145,11 @@ typedef struct grZe_BubbleSpawnPos {
 
 /* 8049F140 */
 /* 8049F158 */
-#ifdef MELEE_HOST
-/* grZebes_GetBubbleStartX and its neighbours index grZe_8049F140 past its two
- * entries: on the console 0x8049F158 follows it by exactly two Vec3, so
- * base[2] and base[3] land in grZe_8049F158.  The host cannot rely on where
- * the linker puts two separate objects, so they are one array here, with the
- * second name an alias at the original offset. */
-static Vec3 grZe_bubble_spots[4];
-#define grZe_8049F140 grZe_bubble_spots
-#define grZe_8049F158 (grZe_bubble_spots + 2)
-#else
+#ifndef MELEE_HOST
 static Vec3 grZe_8049F140[2];
 static Vec3 grZe_8049F158[2];
-#endif
 /* 8049F170 */ static grZe_BubbleEntry grZe_8049F170[20];
-
+#endif
 typedef struct grZe_BubbleScales {
     f32 values[7];
 } grZe_BubbleScales;
@@ -173,6 +163,18 @@ typedef struct grZe_BubbleState {
     Vec3 positions[4];
     grZe_BubbleEntry bubbles[20];
 } grZe_BubbleState;
+#ifdef MELEE_HOST
+/* grZebes_801D881C reads grZe_8049F140, grZe_8049F158 and grZe_8049F170 as
+ * one grZe_BubbleState, and grZebes_GetBubbleStartX and its neighbours index
+ * grZe_8049F140 past its two entries: on the console the three follow each
+ * other in .bss.  The host cannot rely on where the linker puts separate
+ * objects, so they are one object here, with the original names as aliases
+ * at their offsets. */
+static grZe_BubbleState grZe_bubble_state;
+#define grZe_8049F140 grZe_bubble_state.positions
+#define grZe_8049F158 (grZe_bubble_state.positions + 2)
+#define grZe_8049F170 grZe_bubble_state.bubbles
+#endif
 
 typedef struct grZe_AcidState {
     /* +00 */ u8 x00_state;
@@ -820,7 +822,7 @@ void grZebes_801D9508(Ground_GObj* gobj)
     HSD_GObj* map_a_gobj = Ground_GetMapGObj(6);
     PAD_STACK(0x10);
     HSD_ASSERT(909, map_a_gobj);
-    gp->u.zebes.x4 = (u32) Ground_801C3FA4(map_a_gobj, 14);
+    gp->u.zebes.x4_jobj = Ground_801C3FA4(map_a_gobj, 14);
     gp->u.zebes.x8 = 1;
     gp->u.zebes.xA = (s16) (HSD_Randi(600) + 3000);
     gp->u.zebes.x0_b0 = true;
@@ -836,7 +838,7 @@ void grZebes_801D95B8(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
     HSD_JObj* jobj = GET_JOBJ(gobj);
-    HSD_JObj* stored_jobj = (HSD_JObj*) gp->u.zebes.x4;
+    HSD_JObj* stored_jobj = gp->u.zebes.x4_jobj;
 
     if (stored_jobj != NULL) {
         Vec3 pos;
@@ -1245,11 +1247,11 @@ static inline void grZebes_801DA254_inline2(HSD_LObj* lobj, GXColor* color)
 void grZebes_801DA254(Ground_GObj* gobj, f32 level)
 {
     Ground* gp = GET_GROUND(gobj);
-    HSD_LObj* lobj = (HSD_LObj*) gp->u.zebes4.xDC;
+    HSD_LObj* lobj = (HSD_LObj*) gp->u.zebes5.xDC;
 #ifdef MELEE_HOST
-    gp->u.zebes4.xDC = lobj;
+    gp->u.zebes5.xDC = lobj;
 #else
-    gp->u.zebes4.xDC = (u32) lobj;
+    gp->u.zebes5.xDC = (u32) lobj;
 #endif
     if (lobj == NULL) {
         HSD_GObj* lgobj = HSD_GObjGXLinkHead[4];
@@ -1263,9 +1265,9 @@ void grZebes_801DA254(Ground_GObj* gobj, f32 level)
             }
         }
     #ifdef MELEE_HOST
-    gp->u.zebes4.xDC = lobj;
+    gp->u.zebes5.xDC = lobj;
 #else
-    gp->u.zebes4.xDC = (u32) lobj;
+    gp->u.zebes5.xDC = (u32) lobj;
 #endif
     }
 
@@ -1510,11 +1512,14 @@ s32 grZebes_801DAA08(void)
             HSD_JObjAddChild(parent_child, (&grZe_8049F170[selected])->x04);
 
             {
-                u8* dat = (0, (u8*) grDatFiles_801C6330(2)->unk4->unk8);
-                HSD_ShapeAnimJoint** sap =
-                    *(HSD_ShapeAnimJoint***) (dat + 0x74);
-                HSD_AnimJoint** ajp = *(HSD_AnimJoint***) (dat + 0x6C);
-                HSD_MatAnimJoint** mjp = *(HSD_MatAnimJoint***) (dat + 0x70);
+                /* The third model's animation tables, which this used to
+                 * read at raw console offsets (0x6C..0x74) from the model
+                 * array. */
+                struct UnkStageDat_x8_t* dat =
+                    &grDatFiles_801C6330(2)->unk4->unk8[2];
+                HSD_ShapeAnimJoint** sap = dat->unkC;
+                HSD_AnimJoint** ajp = dat->unk4;
+                HSD_MatAnimJoint** mjp = dat->unk8;
                 HSD_ShapeAnimJoint* sa;
                 HSD_MatAnimJoint* ma;
                 HSD_AnimJoint* aj;

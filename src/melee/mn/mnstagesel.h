@@ -24,6 +24,7 @@
 /* Host only: force the stage the running select screen hands to the match,
  * through the same force_stage_id the game's own modes use. */
 bool melee_host_sss_force_stage(int stkind);
+bool melee_host_sss_force_character(int port, int ckind, int cpu_level);
 #endif
 
 #endif
